@@ -6438,7 +6438,7 @@ static engine_test_t *testcases;
 
 MEMCACHED_PUBLIC_API
 engine_test_t* get_tests(void) {
-    TestCase tc[] = {
+    TestCase tco[] = {
         TestCase("validate engine handle", test_validate_engine_handle,
                  NULL, teardown, NULL, prepare, cleanup),
         // basic tests
@@ -6933,6 +6933,43 @@ engine_test_t* get_tests(void) {
         TestCase("multiple transactions", test_multiple_transactions,
                  test_setup, teardown, "max_txn_size=100", prepare, cleanup),
 
+        TestCase(NULL, NULL, NULL, NULL, NULL, prepare, cleanup)
+    };
+
+    TestCase tc[] = {
+        TestCase("flush", test_flush, test_setup, teardown,
+                 NULL, prepare, cleanup),
+        TestCase("flush with stats", test_flush_stats, test_setup, teardown,
+                 "flushall_enabled=true;chk_remover_stime=1;chk_period=60",
+                 prepare, cleanup),
+        TestCase("flush multi vbuckets", test_flush_multiv,
+                 test_setup, teardown,
+                 "flushall_enabled=true;max_vbuckets=16;ht_size=7;ht_locks=3",
+                 prepare, cleanup),
+        TestCase("flush_disabled", test_flush_disabled, test_setup, teardown,
+                 "flushall_enabled=false;max_vbuckets=16;ht_size=7;ht_locks=3",
+                 prepare, cleanup),
+        TestCase("flushall params", test_CBD_152, test_setup, teardown,
+                 "flushall_enabled=true;max_vbuckets=16;"
+                 "ht_size=7;ht_locks=3", prepare, cleanup),
+        TestCase("test restart", test_restart, test_setup,
+                 teardown, NULL, prepare, cleanup),
+        TestCase("test restart with session stats", test_restart_session_stats, test_setup,
+                 teardown, NULL, prepare, cleanup),
+        TestCase("set+get+restart+hit (bin)", test_restart_bin_val,
+                 test_setup, teardown, NULL, prepare, cleanup),
+        TestCase("flush+restart", test_flush_restart, test_setup,
+                 teardown, NULL, prepare, cleanup),
+        TestCase("flush multiv+restart", test_flush_multiv_restart,
+                 test_setup, teardown, NULL, prepare, cleanup),
+        TestCase("test kill -9 bucket", test_kill9_bucket,
+                 test_setup, teardown, NULL, prepare, cleanup),
+        TestCase("test shutdown with force", test_flush_shutdown_force,
+                 test_setup, teardown,
+                 "max_txn_size=30", prepare, cleanup),
+        TestCase("test shutdown without force", test_flush_shutdown_noforce,
+                 test_setup, teardown,
+                 "max_txn_size=30", prepare, cleanup),
         TestCase(NULL, NULL, NULL, NULL, NULL, prepare, cleanup)
     };
 

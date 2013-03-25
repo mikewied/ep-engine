@@ -305,11 +305,6 @@ CouchKVStore::CouchKVStore(const CouchKVStore &copyFrom) :
 void CouchKVStore::reset()
 {
     assert(!isReadOnly());
-    // TODO CouchKVStore::flush() when couchstore api ready
-    RememberingCallback<bool> cb;
-
-    couchNotifier->flush(cb);
-    cb.waitForValue();
 
     vbucket_map_t::iterator itor = cachedVBStates.begin();
     for (; itor != cachedVBStates.end(); ++itor) {
@@ -520,7 +515,7 @@ bool CouchKVStore::delVBucket(uint16_t vbucket, bool recreate)
             vbstate.state = it->second.state;
         }
         cachedVBStates[vbucket] = vbstate;
-        resetVBucket(vbucket, vbstate);
+        setVBucketState(vbucket, vbstate, VB_STATE_CHANGED, true, true);
     } else {
         cachedVBStates.erase(vbucket);
     }
@@ -729,6 +724,72 @@ bool CouchKVStore::snapshotStats(const std::map<std::string, std::string> &stats
     }
 
     return rv;
+}
+
+bool CouchKVStore::resetVBucket(uint16_t vbid, vbucket_state &vbstate)
+{
+    Db *db = NULL;
+    uint64_t fileRev = 1;
+    uint64_t newFileRev;
+    std::string dbFileName;
+    std::map<uint16_t, uint64_t>::iterator mapItr;
+
+    if (getDbFile(vbid, dbFileName)) {
+        fileRev = dbFileRev(dbFileName);
+     }
+
+    if (openDB(vbid, fileRev, &db, 0, &newFileRev) != COUCHSTORE_SUCCESS) {
+        LOG(EXTENSION_LOG_WARNING, "Failed to open database, name=%s.%d",
+            dbFileName.c_str(), fileRev);
+        return false;
+    }
+    fileRev = newFileRev;
+
+    if (couchstore_reset(db) != COUCHSTORE_SUCCESS) {
+        LOG(EXTENSION_LOG_WARNING, "Failed to reset database, name=%s",
+            dbFileName.c_str());
+        closeDatabaseHandle(db);
+        return false;
+    }
+
+    if (saveVBState(db, vbstate) != COUCHSTORE_SUCCESS) {
+        LOG(EXTENSION_LOG_WARNING, "Failed to save local doc, name=%s",
+            dbFileName.c_str());
+        closeDatabaseHandle(db);
+        return false;
+    }
+
+    couchstore_error_t errorCode = couchstore_commit(db);
+    if (errorCode != COUCHSTORE_SUCCESS) {
+        LOG(EXTENSION_LOG_WARNING,
+            "Commit failed, vbid=%u rev=%llu error=%s [%s]",
+            vbid, fileRev, couchstore_strerror(errorCode),
+            couchkvstore_strerrno(errorCode).c_str());
+        closeDatabaseHandle(db);
+        return false;
+    }
+
+    RememberingCallback<uint16_t> cb;
+    uint64_t newPos = couchstore_get_header_position(db);
+    couchNotifier->notify_headerpos_update(vbid, newFileRev, newPos, cb);
+    if (cb.val != PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+        if (cb.val == PROTOCOL_BINARY_RESPONSE_ETMPFAIL) {
+            LOG(EXTENSION_LOG_WARNING,
+                "Retry notify CouchDB of update, vbucket=%d rev=%llu\n",
+                vbid, newFileRev);
+            fileRev = newFileRev;
+            // Might want to retry here
+        } else {
+            LOG(EXTENSION_LOG_WARNING, "Warning: failed to notify "
+                "CouchDB of update for vbucket=%d, error=0x%x\n",
+                vbid, cb.val);
+        }
+        return false;
+    }
+
+    closeDatabaseHandle(db);
+
+    return true;
 }
 
 bool CouchKVStore::setVBucketState(uint16_t vbucketId, vbucket_state &vbstate,

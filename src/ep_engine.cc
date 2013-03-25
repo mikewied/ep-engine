@@ -1180,7 +1180,7 @@ EventuallyPersistentEngine::EventuallyPersistentEngine(GET_SERVER_API get_server
     getServerApiFunc(get_server_api), getlExtension(NULL),
     tapConnMap(NULL), tapConfig(NULL), checkpointConfig(NULL),
     warmingUp(true),
-    flushAllEnabled(false), startupTime(0)
+    flushAllEnabled(true), startupTime(0)
 {
     interface.interface = 1;
     ENGINE_HANDLE_V1::get_info = EvpGetInfo;

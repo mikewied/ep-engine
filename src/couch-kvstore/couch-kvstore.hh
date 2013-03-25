@@ -512,9 +512,7 @@ protected:
     bool setVBucketState(uint16_t vbucketId, vbucket_state &vbstate,
                          uint32_t vb_change_type, bool newfile = false,
                          bool notify = true);
-    bool resetVBucket(uint16_t vbucketId, vbucket_state &vbstate) {
-        return setVBucketState(vbucketId, vbstate, VB_STATE_CHANGED, true, true);
-    }
+    bool resetVBucket(uint16_t vbucketId, vbucket_state &vbstate);
 
     template <typename T>
     void addStat(const std::string &prefix, const char *nm, T &val,

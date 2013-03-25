@@ -481,7 +481,7 @@ public:
     }
 
     void setFlushAll(bool enabled) {
-        flushAllEnabled = enabled;
+        //flushAllEnabled = enabled;
     }
 
     protocol_binary_response_status evictKey(const std::string &key,
