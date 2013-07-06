@@ -159,6 +159,8 @@ check_PROGRAMS=\
                json_test \
                misc_test \
                mutex_test \
+               mqueue_test \
+               linked_list_test \
                priority_test \
                ringbuffer_test
 
@@ -299,6 +301,18 @@ histo_test_CXXFLAGS = $(AM_CPPFLAGS) $(AM_CXXFLAGS) ${NO_WERROR}
 histo_test_SOURCES = tests/module_tests/histo_test.cc src/common.h src/histo.h
 histo_test_DEPENDENCIES = src/common.h src/histo.h
 
+mqueue_test_CXXFLAGS = $(AM_CPPFLAGS) $(AM_CXXFLAGS) ${NO_WERROR}
+mqueue_test_SOURCES = tests/module_tests/mqueue_tests.cc src/mqueue.h \
+                      src/mqueue.cc src/ mitem.h src/ep_time.h        \
+                      src/testlogger.cc tests/mock/mock_ep_time.c     \
+                      src/mutex.h src/mutex.cc src/locks.h
+mqueue_test_DEPENDENCIES = src/mqueue.h src/mitem.h
+
+linked_list_test_CXXFLAGS = $(AM_CPPFLAGS) $(AM_CXXFLAGS) ${NO_WERROR}
+linked_list_test_SOURCES = src/linked_list.h src/linked_list.cc \
+                           tests/module_tests/linked_list_test.cc
+linked_list_test_DEPENDENCIES = src/linked_list.h
+
 chunk_creation_test_CXXFLAGS = $(AM_CPPFLAGS) $(AM_CXXFLAGS) ${NO_WERROR}
 chunk_creation_test_SOURCES = tests/module_tests/chunk_creation_test.cc \
                               src/common.h
@@ -313,6 +327,7 @@ hrtime_test_SOURCES += src/gethrtime.c
 dispatcher_test_SOURCES += src/gethrtime.c
 ep_testsuite_la_SOURCES += src/gethrtime.c
 hash_table_test_SOURCES += src/gethrtime.c
+mqueue_test_SOURCES += src/gethrtime.c
 endif
 
 if BUILD_BYTEORDER
