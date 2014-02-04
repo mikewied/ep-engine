@@ -781,10 +781,8 @@ private:
                                            ADD_STAT add_stat,
                                            std::string &key,
                                            uint16_t vbid);
-    ENGINE_ERROR_CODE doVbIdFailoverLogStats(const void *cookie,
-                                             ADD_STAT add_stat,
-                                             uint16_t vbid);
-    ENGINE_ERROR_CODE doAllFailoverLogStats(const void *cookie, ADD_STAT add_stat);
+    ENGINE_ERROR_CODE doFailoverLogStats(const void *cookie, ADD_STAT add_stat,
+                                         uint16_t vbid);
     ENGINE_ERROR_CODE doWorkloadStats(const void *cookie, ADD_STAT add_stat);
     ENGINE_ERROR_CODE doSeqnoStats(const void *cookie, ADD_STAT add_stat,
                                    const char* stat_key, int nkey);

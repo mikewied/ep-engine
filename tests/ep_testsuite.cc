@@ -4858,6 +4858,7 @@ static enum test_result test_key_stats(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1) {
 }
 
 static enum test_result test_vkey_stats(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1) {
+    abort();
     check(set_vbucket_state(h, h1, 1, vbucket_state_active), "Failed set vbucket 1 state.");
     check(set_vbucket_state(h, h1, 2, vbucket_state_active), "Failed set vbucket 2 state.");
     check(set_vbucket_state(h, h1, 3, vbucket_state_active), "Failed set vbucket 3 state.");

@@ -68,7 +68,7 @@ private:
 
 class UprBackfill : public GlobalTask {
 public:
-    UprBackfill(EventuallyPersistentEngine* e, active_stream_t &s,
+    UprBackfill(EventuallyPersistentEngine* e, active_stream_t s,
                 uint64_t start_seqno, uint64_t end_seqno, const Priority &p,
                 double sleeptime = 0, bool shutdown = false) :
         GlobalTask(e, p, sleeptime, shutdown), engine(e), stream(s),
@@ -409,8 +409,7 @@ void ActiveStream::scheduleBackfill() {
             }
             LOG(EXTENSION_LOG_WARNING, "Scheduling backfill for vb %d (%d to %d)",
                 vb_, lastReadSeqno, curChkSeqno);
-            active_stream_t stream(this);
-            ExTask task = new UprBackfill(engine, stream, lastReadSeqno, backfillEnd,
+            ExTask task = new UprBackfill(engine, this, lastReadSeqno, backfillEnd,
                                           Priority::TapBgFetcherPriority, 0, false);
             ExecutorPool::get()->schedule(task, AUXIO_TASK_IDX);
             isBackfillTaskRunning = true;
