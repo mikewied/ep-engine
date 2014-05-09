@@ -445,6 +445,16 @@ def stats_dispatcher(mc, with_logs='no'):
                     print "        ---------"
 
 @cmd
+def stats_all_keys(mc, vb):
+    try:
+        cmd = "all-keys %s" % (str(vb))
+        res = stats_perform(mc, cmd)
+        for stat, val in sorted(res.items(), cmp=cmp):
+            print stat
+    except ValueError:
+        print 'Specified vbucket \"%s\" is not valid' % str(vb)
+
+@cmd
 def reset(mc):
     stats_perform(mc, 'reset')
 
@@ -452,6 +462,7 @@ def main():
     c = clitool.CliTool()
 
     c.addCommand('all', stats_all, 'all')
+    c.addCommand('all-keys', stats_all_keys, 'all-keys [vbid]')
     c.addCommand('allocator', stats_allocator, 'allocator')
     c.addCommand('checkpoint', stats_checkpoint, 'checkpoint [vbid]')
     c.addCommand('config', stats_config, 'config')

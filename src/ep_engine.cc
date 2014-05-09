@@ -3246,6 +3246,42 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::doEngineStats(const void *cookie,
     return ENGINE_SUCCESS;
 }
 
+ENGINE_ERROR_CODE EventuallyPersistentEngine::doAllKeyStats(const void *cookie,
+                                                            ADD_STAT add_stat,
+                                                            const char* stat_key,
+                                                            int nkey) {
+    class AllKeyStatVisitor : public HashTableVisitor {
+    public:
+
+        AllKeyStatVisitor(const void* c, ADD_STAT a)
+            : HashTableVisitor(), cookie(c), add_stat(a), numTotal(0) {
+        }
+
+        void visit(StoredValue *v) {
+            ++numTotal;
+            add_casted_stat(v->getKey().c_str(), "", add_stat, cookie);
+        }
+
+        const void* cookie;
+        ADD_STAT add_stat;
+        size_t numTotal;
+    };
+
+    std::string vbid(&stat_key[9], nkey - 9);
+    uint16_t vbucket_id(0);
+    if (!parseUint16(vbid.c_str(), &vbucket_id)) {
+        return ENGINE_EINVAL;
+    }
+
+    RCPtr<VBucket> vb = getVBucket(vbucket_id);
+    if (vb) {
+        AllKeyStatVisitor visitor(cookie, add_stat);
+        vb->ht.visit(visitor);
+    }
+
+    return ENGINE_SUCCESS;
+}
+
 ENGINE_ERROR_CODE EventuallyPersistentEngine::doMemoryStats(const void *cookie,
                                                            ADD_STAT add_stat) {
     add_casted_stat("bytes", stats.getTotalMemoryUsed(), add_stat, cookie);
@@ -4064,6 +4100,8 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::getStats(const void* cookie,
     ENGINE_ERROR_CODE rv = ENGINE_KEY_ENOENT;
     if (stat_key == NULL) {
         rv = doEngineStats(cookie, add_stat);
+    } else if (nkey > 9 && strncmp(stat_key, "all-keys ", 9) == 0) {
+        rv = doAllKeyStats(cookie, add_stat, stat_key, nkey);
     } else if (nkey > 7 && strncmp(stat_key, "tapagg ", 7) == 0) {
         rv = doConnAggStats(cookie, add_stat, stat_key + 7, nkey - 7,
                             TAP_CONN);

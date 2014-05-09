@@ -741,6 +741,8 @@ private:
 
     ENGINE_ERROR_CODE doEngineStats(const void *cookie, ADD_STAT add_stat);
     ENGINE_ERROR_CODE doKlogStats(const void *cookie, ADD_STAT add_stat);
+    ENGINE_ERROR_CODE doAllKeyStats(const void *cookie, ADD_STAT add_stat,
+                                    const char* stat_key, int nkey);
     ENGINE_ERROR_CODE doMemoryStats(const void *cookie, ADD_STAT add_stat);
     ENGINE_ERROR_CODE doVBucketStats(const void *cookie, ADD_STAT add_stat,
                                      const char* stat_key,
