@@ -20,8 +20,11 @@
 #include <string>
 
 #include "ep_engine.h"
+#include "failover-table.h"
 #include "upr-engine-context.h"
+#include "upr-consumer.h"
 #include "upr-producer.h"
+#include "upr-response.h"
 #include "upr-stream.h"
 
 #define UPR_BACKFILL_SLEEP_TIME 2
@@ -245,4 +248,113 @@ const char* ActiveStreamEngineCtx::logHeader() {
 
 void ActiveStreamEngineCtx::notify(bool schedule) {
     producer->notifyStreamReady(vbid, schedule);
+}
+
+PassiveStreamEngineCtx::PassiveStreamEngineCtx(EventuallyPersistentEngine* e,
+                                               UprConsumer* c, uint16_t vb)
+    : PassiveStreamCtx(), engine(e), consumer(c), vbid(vb) {
+
+}
+
+void PassiveStreamEngineCtx::processMutation(MutationResponse* mutation) {
+    RCPtr<VBucket> vb = engine->getVBucket(vbid);
+    if (!vb) {
+        return;
+    }
+
+    ENGINE_ERROR_CODE ret;
+    if (vb->isBackfillPhase()) {
+        ret = engine->getEpStore()->addTAPBackfillItem(*mutation->getItem(),
+                                                       INITIAL_NRU_VALUE);
+    } else {
+        ret = engine->getEpStore()->setWithMeta(*mutation->getItem(), 0,
+                                                consumer->getCookie(), true,
+                                                true, INITIAL_NRU_VALUE, false);
+    }
+
+    delete mutation->getItem();
+    delete mutation;
+
+    // We should probably handle these error codes in a better way, but since
+    // the producer side doesn't do anything with them anyways let's just log
+    // them for now until we come up with a better solution.
+    if (ret != ENGINE_SUCCESS) {
+        LOG(EXTENSION_LOG_WARNING, "%s Got an error code %d while trying to "
+            "process  mutation", consumer->logHeader(), ret);
+    }
+}
+
+void PassiveStreamEngineCtx::processDeletion(MutationResponse* deletion) {
+    RCPtr<VBucket> vb = engine->getVBucket(vbid);
+    if (!vb) {
+        return;
+    }
+
+    uint64_t delCas = 0;
+    ENGINE_ERROR_CODE ret;
+    ItemMetaData meta = deletion->getItem()->getMetaData();
+    ret = engine->getEpStore()->deleteWithMeta(deletion->getItem()->getKey(),
+                                               &delCas, deletion->getVBucket(),
+                                               consumer->getCookie(), true,
+                                               &meta, vb->isBackfillPhase(),
+                                               false, deletion->getBySeqno());
+    if (ret == ENGINE_KEY_ENOENT) {
+        ret = ENGINE_SUCCESS;
+    }
+
+    delete deletion->getItem();
+    delete deletion;
+
+    // We should probably handle these error codes in a better way, but since
+    // the producer side doesn't do anything with them anyways let's just log
+    // them for now until we come up with a better solution.
+    if (ret != ENGINE_SUCCESS) {
+        LOG(EXTENSION_LOG_WARNING, "%s Got an error code %d while trying to "
+            "process  deletion", consumer->logHeader(), ret);
+    }
+}
+
+void PassiveStreamEngineCtx::processMarker(SnapshotMarker* marker) {
+    RCPtr<VBucket> vb = engine->getVBucket(vbid);
+    if (!vb) {
+        return;
+    }
+
+    if (marker->getFlags() & MARKER_FLAG_DISK && vb->getHighSeqno() == 0) {
+        vb->setBackfillPhase(true);
+        vb->checkpointManager.checkAndAddNewCheckpoint(0, vb);
+    } else {
+        vb->setBackfillPhase(false);
+        uint64_t id = vb->checkpointManager.getOpenCheckpointId() + 1;
+        vb->checkpointManager.checkAndAddNewCheckpoint(id, vb);
+    }
+}
+
+void PassiveStreamEngineCtx::processSetVBucketState(SetVBucketState* state) {
+    engine->getEpStore()->setVBucketState(vbid, state->getState(), false);
+    delete state;
+}
+
+uint64_t PassiveStreamEngineCtx::getVBucketUUID() {
+    RCPtr<VBucket> vb = engine->getVBucket(vbid);
+    if (!vb) {
+        return 0;
+    }
+    return vb->failovers->getLatestEntry().vb_uuid;
+}
+
+uint64_t PassiveStreamEngineCtx::getHighSeqno() {
+    RCPtr<VBucket> vb = engine->getVBucket(vbid);
+    if (!vb) {
+        return 0;
+    }
+    return vb->getHighSeqno();
+}
+
+const char* PassiveStreamEngineCtx::logHeader() {
+    return consumer->logHeader();
+}
+
+void PassiveStreamEngineCtx::notify() {
+    consumer->notifyStreamReady(vbid);
 }

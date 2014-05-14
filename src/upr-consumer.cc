@@ -22,6 +22,7 @@
 #include "tapconnmap.h"
 #include "tapthrottle.h"
 #include "upr-consumer.h"
+#include "upr-engine-context.h"
 #include "upr-response.h"
 #include "upr-stream.h"
 
@@ -119,10 +120,11 @@ ENGINE_ERROR_CODE UprConsumer::addStream(uint32_t opaque, uint16_t vbucket,
         return ENGINE_KEY_EEXISTS;
     }
 
-    streams[vbucket] = new PassiveStream(&engine_, this, getName(), flags,
-                                         new_opaque, vbucket, start_seqno,
-                                         end_seqno, vbucket_uuid,
-                                         snap_start_seqno, snap_end_seqno);
+    PassiveStreamCtx* ctx = new PassiveStreamEngineCtx(&engine_, this, vbucket);
+    streams[vbucket] = new PassiveStream(ctx, getName(), flags, new_opaque,
+                                         vbucket, start_seqno, end_seqno,
+                                         vbucket_uuid, snap_start_seqno,
+                                         snap_end_seqno);
     ready.push_back(vbucket);
     opaqueMap_[new_opaque] = std::make_pair(opaque, vbucket);
 
@@ -493,8 +495,7 @@ void UprConsumer::doRollback(EventuallyPersistentStore *st,
     }
 
     if (errCode == ENGINE_SUCCESS) {
-        RCPtr<VBucket> vb = st->getVBucket(vbid);
-        streams[vbid]->reconnectStream(vb, opaque, rollbackSeqno);
+        streams[vbid]->reconnectStream(opaque, rollbackSeqno);
     } else {
         //TODO: If rollback failed due to internal errors, we need to
         //send an error message back to producer, so that it can terminate

@@ -22,6 +22,9 @@
 
 class ActiveStream;
 class EventuallyPersistentEngine;
+class MutationResponse;
+class SetVBucketState;
+class SnapshotMarker;
 
 class ActiveStreamCtx {
 public:
@@ -49,6 +52,25 @@ public:
     virtual const char* logHeader() = 0;
 
     virtual void notify(bool schedule) = 0;
+};
+
+class PassiveStreamCtx {
+public:
+    virtual void processMutation(MutationResponse* mutation) = 0;
+
+    virtual void processDeletion(MutationResponse* deletion) = 0;
+
+    virtual void processMarker(SnapshotMarker* marker) = 0;
+
+    virtual void processSetVBucketState(SetVBucketState* state) = 0;
+
+    virtual uint64_t getVBucketUUID() = 0;
+
+    virtual uint64_t getHighSeqno() = 0;
+
+    virtual const char* logHeader() = 0;
+
+    virtual void notify() = 0;
 };
 
 

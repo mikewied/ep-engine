@@ -21,6 +21,10 @@
 
 class ActiveStream;
 class EventuallyPersistentEngine;
+class MutationResponse;
+class SetVBucketState;
+class SnapshotMarker;
+class UprConsumer;
 class UprProducer;
 
 class ActiveStreamEngineCtx : public ActiveStreamCtx {
@@ -53,5 +57,32 @@ public:
 private:
     EventuallyPersistentEngine* engine;
     UprProducer* producer;
+    uint16_t vbid;
+};
+
+class PassiveStreamEngineCtx : public PassiveStreamCtx {
+public:
+    PassiveStreamEngineCtx(EventuallyPersistentEngine* engine,
+                           UprConsumer* consumer, uint16_t vbid);
+
+    void processMutation(MutationResponse *mutation);
+
+    void processDeletion(MutationResponse* deletion);
+
+    void processMarker(SnapshotMarker* marker);
+
+    void processSetVBucketState(SetVBucketState* state);
+
+    uint64_t getVBucketUUID();
+
+    uint64_t getHighSeqno();
+
+    const char* logHeader();
+
+    void notify();
+
+private:
+    EventuallyPersistentEngine* engine;
+    UprConsumer* consumer;
     uint16_t vbid;
 };
