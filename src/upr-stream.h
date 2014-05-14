@@ -22,6 +22,10 @@
 
 #include <queue>
 
+#include "atomic.h"
+#include "item.h"
+#include "locks.h"
+#include "mutex.h"
 #include "upr-context.h"
 
 class MutationResponse;

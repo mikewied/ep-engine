@@ -189,6 +189,13 @@ ADD_EXECUTABLE(ep-engine_failover_table_test tests/module_tests/failover_table_t
                         ${OBJECTREGISTRY_SOURCE})
 TARGET_LINK_LIBRARIES(ep-engine_failover_table_test cJSON platform)
 
+ADD_EXECUTABLE(ep-engine_upr_stream_test tests/module_tests/upr_stream_test.cc
+                        src/upr-stream.cc src/upr-response.cc src/mutex.cc
+                        src/ep_time.c src/item.cc src/testlogger.cc
+                        tests/module_tests/test_memory_tracker.cc
+                        ${OBJECTREGISTRY_SOURCE})
+TARGET_LINK_LIBRARIES(ep-engine_upr_stream_test ${SNAPPY_LIBRARIES} platform)
+
 ADD_TEST(ep-engine_atomic_ptr_test ep-engine_atomic_ptr_test)
 ADD_TEST(ep-engine_atomic_test ep-engine_atomic_test)
 ADD_TEST(ep-engine_checkpoint_test ep-engine_checkpoint_test)
@@ -201,6 +208,7 @@ ADD_TEST(ep-engine_misc_test ep-engine_misc_test)
 ADD_TEST(ep-engine_mutex_test ep-engine_mutex_test)
 ADD_TEST(ep-engine_priority_test ep-engine_priority_test)
 ADD_TEST(ep-engine_ringbuffer_test ep-engine_ringbuffer_test)
+ADD_TEST(ep-engine_upr_stream_test ep-engine_upr_stream_test)
 
 ADD_LIBRARY(timing_tests SHARED tests/module_tests/timing_tests.cc)
 SET_TARGET_PROPERTIES(timing_tests PROPERTIES PREFIX "")
