@@ -358,3 +358,25 @@ const char* PassiveStreamEngineCtx::logHeader() {
 void PassiveStreamEngineCtx::notify() {
     consumer->notifyStreamReady(vbid);
 }
+
+NotifierStreamEngineCtx::NotifierStreamEngineCtx(EventuallyPersistentEngine* e,
+                            UprProducer* p, uint16_t vb)
+    : NotifierStreamCtx(), engine(e), producer(p), vbid(vb) {
+
+}
+
+uint64_t NotifierStreamEngineCtx::getHighSeqno() {
+    RCPtr<VBucket> vb = engine->getVBucket(vbid);
+    if (!vb) {
+        return 0;
+    }
+    return vb->getHighSeqno();
+}
+
+const char* NotifierStreamEngineCtx::logHeader() {
+    return producer->logHeader();
+}
+
+void NotifierStreamEngineCtx::notify(bool schedule) {
+    producer->notifyStreamReady(vbid, schedule);
+}

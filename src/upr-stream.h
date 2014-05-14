@@ -24,7 +24,6 @@
 
 #include "upr-context.h"
 
-class EventuallyPersistentEngine;
 class MutationResponse;
 class SetVBucketState;
 class SnapshotMarker;
@@ -223,16 +222,16 @@ private:
 
 class NotifierStream : public Stream {
 public:
-    NotifierStream(EventuallyPersistentEngine* e, UprProducer* producer,
-                   const std::string &name, uint32_t flags, uint32_t opaque,
-                   uint16_t vb, uint64_t start_seqno, uint64_t end_seqno,
-                   uint64_t vb_uuid, uint64_t snap_start_seqno,
-                   uint64_t snap_end_seqno);
+    NotifierStream(NotifierStreamCtx* ctx, const std::string &name,
+                   uint32_t flags, uint32_t opaque, uint16_t vb,
+                   uint64_t start_seqno, uint64_t end_seqno, uint64_t vb_uuid,
+                   uint64_t snap_start_seqno, uint64_t snap_end_seqno);
 
     ~NotifierStream() {
         LockHolder lh(streamMutex);
         transitionState(STREAM_DEAD);
         clear_UNLOCKED();
+        delete ctx;
     }
 
     UprResponse* next();
@@ -245,7 +244,7 @@ private:
 
     void transitionState(stream_state_t newState);
 
-    UprProducer* producer;
+    NotifierStreamCtx* ctx;
 };
 
 class PassiveStream : public Stream {

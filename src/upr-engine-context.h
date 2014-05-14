@@ -86,3 +86,20 @@ private:
     UprConsumer* consumer;
     uint16_t vbid;
 };
+
+class NotifierStreamEngineCtx : public NotifierStreamCtx {
+public:
+    NotifierStreamEngineCtx(EventuallyPersistentEngine* engine,
+                            UprProducer* producer, uint16_t vbid);
+
+    uint64_t getHighSeqno();
+
+    const char* logHeader();
+
+    void notify(bool schedule);
+
+private:
+    EventuallyPersistentEngine* engine;
+    UprProducer* producer;
+    uint16_t vbid;
+};

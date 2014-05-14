@@ -154,10 +154,12 @@ ENGINE_ERROR_CODE UprProducer::streamRequest(uint32_t flags,
     }
 
     if (notifyOnly) {
-        streams[vbucket] = new NotifierStream(&engine_, this, getName(), flags,
-                                              opaque, vbucket, notifySeqno,
-                                              end_seqno, vbucket_uuid,
-                                              snap_start_seqno, snap_end_seqno);
+        NotifierStreamCtx* ctx = new NotifierStreamEngineCtx(&engine_, this,
+                                                             vbucket);
+        streams[vbucket] = new NotifierStream(ctx, getName(), flags, opaque,
+                                              vbucket, notifySeqno, end_seqno,
+                                              vbucket_uuid, snap_start_seqno,
+                                              snap_end_seqno);
     } else {
         ActiveStreamCtx* ctx = new ActiveStreamEngineCtx(&engine_, this,
                                                          vbucket);

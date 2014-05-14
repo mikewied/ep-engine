@@ -17,12 +17,9 @@
 
 #include "config.h"
 
-#include "ep_engine.h"
 #include "failover-table.h"
-#include "kvstore.h"
 #include "statwriter.h"
 #include "upr-stream.h"
-#include "upr-producer.h"
 #include "upr-response.h"
 
 const uint64_t Stream::uprMaxSeqno = std::numeric_limits<uint64_t>::max();
@@ -549,18 +546,17 @@ size_t ActiveStream::getItemsRemaining() {
     return (high_seqno > lastSentSeqno) ? high_seqno - lastSentSeqno : 0;
 }
 
-NotifierStream::NotifierStream(EventuallyPersistentEngine* e, UprProducer* p,
-                               const std::string &name, uint32_t flags,
-                               uint32_t opaque, uint16_t vb, uint64_t st_seqno,
-                               uint64_t en_seqno, uint64_t vb_uuid,
-                               uint64_t snap_start_seqno,
+NotifierStream::NotifierStream(NotifierStreamCtx* c, const std::string &name,
+                               uint32_t flags, uint32_t opaque, uint16_t vb,
+                               uint64_t st_seqno, uint64_t en_seqno,
+                               uint64_t vb_uuid, uint64_t snap_start_seqno,
                                uint64_t snap_end_seqno)
     : Stream(name, flags, opaque, vb, st_seqno, en_seqno, vb_uuid,
              snap_start_seqno, snap_end_seqno),
-      producer(p) {
+      ctx(c) {
     LockHolder lh(streamMutex);
-    RCPtr<VBucket> vbucket = e->getVBucket(vb_);
-    if (vbucket && static_cast<uint64_t>(vbucket->getHighSeqno()) > st_seqno) {
+    uint64_t curSeqno = ctx->getHighSeqno();
+    if (curSeqno > st_seqno) {
         readyQ.push(new StreamEndResponse(opaque_, END_STREAM_OK, vb_));
         transitionState(STREAM_DEAD);
         itemsReady = true;
@@ -569,7 +565,7 @@ NotifierStream::NotifierStream(EventuallyPersistentEngine* e, UprProducer* p,
     type_ = STREAM_NOTIFIER;
 
     LOG(EXTENSION_LOG_WARNING, "%s (vb %d) stream created with start seqno "
-        "%llu and end seqno %llu", producer->logHeader(), vb, st_seqno,
+        "%llu and end seqno %llu", ctx->logHeader(), vb, st_seqno,
         en_seqno);
 }
 
@@ -582,7 +578,7 @@ void NotifierStream::setDead(end_stream_status_t status) {
             if (!itemsReady) {
                 itemsReady = true;
                 lh.unlock();
-                producer->notifyStreamReady(vb_, true);
+                ctx->notify(true);
             }
         }
     }
@@ -596,7 +592,7 @@ void NotifierStream::notifySeqnoAvailable(uint64_t seqno) {
         if (!itemsReady) {
             itemsReady = true;
             lh.unlock();
-            producer->notifyStreamReady(vb_, true);
+            ctx->notify(true);
         }
     }
 }
@@ -617,7 +613,7 @@ UprResponse* NotifierStream::next() {
 
 void NotifierStream::transitionState(stream_state_t newState) {
     LOG(EXTENSION_LOG_DEBUG, "%s (vb %d) Transitioning from %s to %s",
-        producer->logHeader(), vb_, stateName(state_), stateName(newState));
+        ctx->logHeader(), vb_, stateName(state_), stateName(newState));
 
     if (state_ == newState) {
         return;
@@ -629,7 +625,7 @@ void NotifierStream::transitionState(stream_state_t newState) {
             break;
         default:
             LOG(EXTENSION_LOG_WARNING, "%s (vb %d) Invalid Transition from %s "
-                "to %s", producer->logHeader(), vb_, stateName(state_),
+                "to %s", ctx->logHeader(), vb_, stateName(state_),
                 stateName(newState));
             abort();
     }

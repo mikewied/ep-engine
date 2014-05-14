@@ -73,5 +73,13 @@ public:
     virtual void notify() = 0;
 };
 
+class NotifierStreamCtx {
+public:
+    virtual uint64_t getHighSeqno() = 0;
+
+    virtual const char* logHeader() = 0;
+
+    virtual void notify(bool schedule) = 0;
+};
 
 #endif  // SRC_UPR_CONTEXT_H_
