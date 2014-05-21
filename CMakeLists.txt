@@ -128,8 +128,8 @@ ADD_LIBRARY(ep SHARED
             src/tapthrottle.cc src/tasks.cc
             src/taskqueue.cc
             src/upr-response.cc src/upr-consumer.cc
-            src/upr-producer.cc src/upr-stream.cc src/vbucket.cc
-            src/vbucketmap.cc src/warmup.cc
+            src/upr-producer.cc src/upr-stream.cc src/upr-engine-context.cc
+            src/vbucket.cc src/vbucketmap.cc src/warmup.cc
             ${KVSTORE_SOURCE} ${COUCH_KVSTORE_SOURCE}
             ${OBJECTREGISTRY_SOURCE} ${CONFIG_SOURCE})
 

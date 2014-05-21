@@ -26,144 +26,7 @@
 #include "upr-producer.h"
 #include "upr-response.h"
 
-#define UPR_BACKFILL_SLEEP_TIME 2
-
 const uint64_t Stream::uprMaxSeqno = std::numeric_limits<uint64_t>::max();
-
-class SnapshotMarkerCallback : public Callback<SeqnoRange> {
-public:
-    SnapshotMarkerCallback(stream_t s)
-        : stream(s) {
-        assert(s->getType() == STREAM_ACTIVE);
-    }
-
-    void callback(SeqnoRange &range) {
-        uint64_t st = range.getStartSeqno();
-        uint64_t en = range.getEndSeqno();
-        static_cast<ActiveStream*>(stream.get())->markDiskSnapshot(st, en);
-    }
-
-private:
-    stream_t stream;
-};
-
-class CacheCallback : public Callback<CacheLookup> {
-public:
-    CacheCallback(EventuallyPersistentEngine* e, stream_t &s)
-        : engine_(e), stream_(s) {
-        Stream *str = stream_.get();
-        if (str) {
-            assert(str->getType() == STREAM_ACTIVE);
-        }
-    }
-
-    void callback(CacheLookup &lookup);
-
-private:
-    EventuallyPersistentEngine* engine_;
-    stream_t stream_;
-};
-
-void CacheCallback::callback(CacheLookup &lookup) {
-    RCPtr<VBucket> vb = engine_->getEpStore()->getVBucket(lookup.getVBucketId());
-    if (!vb) {
-        setStatus(ENGINE_SUCCESS);
-        return;
-    }
-
-    int bucket_num(0);
-    LockHolder lh = vb->ht.getLockedBucket(lookup.getKey(), &bucket_num);
-    StoredValue *v = vb->ht.unlocked_find(lookup.getKey(), bucket_num, false, false);
-    if (v && v->isResident() && v->getBySeqno() == lookup.getBySeqno()) {
-        Item* it = v->toItem(false, lookup.getVBucketId());
-        lh.unlock();
-        static_cast<ActiveStream*>(stream_.get())->backfillReceived(it);
-        setStatus(ENGINE_KEY_EEXISTS);
-    } else {
-        setStatus(ENGINE_SUCCESS);
-    }
-}
-
-class DiskCallback : public Callback<GetValue> {
-public:
-    DiskCallback(stream_t &s)
-        : stream_(s) {
-        Stream *str = stream_.get();
-        if (str) {
-            assert(str->getType() == STREAM_ACTIVE);
-        }
-    }
-
-    void callback(GetValue &val) {
-        cb_assert(val.getValue());
-        ActiveStream* active_stream = static_cast<ActiveStream*>(stream_.get());
-        active_stream->backfillReceived(val.getValue());
-    }
-
-private:
-    stream_t stream_;
-};
-
-class UprBackfill : public GlobalTask {
-public:
-    UprBackfill(EventuallyPersistentEngine* e, stream_t s,
-                uint64_t start_seqno, uint64_t end_seqno, const Priority &p,
-                double sleeptime = 0, bool shutdown = false)
-        : GlobalTask(e, p, sleeptime, shutdown), engine(e), stream(s),
-          startSeqno(start_seqno), endSeqno(end_seqno) {
-        assert(stream->getType() == STREAM_ACTIVE);
-    }
-
-    bool run();
-
-    std::string getDescription();
-
-private:
-    EventuallyPersistentEngine *engine;
-    stream_t                    stream;
-    uint64_t                    startSeqno;
-    uint64_t                    endSeqno;
-};
-
-bool UprBackfill::run() {
-    uint16_t vbid = stream->getVBucket();
-    uint64_t lastPersistedSeqno =
-        engine->getEpStore()->getVBuckets().getPersistenceSeqno(vbid);
-
-    if (lastPersistedSeqno < endSeqno) {
-        LOG(EXTENSION_LOG_WARNING, "Rescheduling backfill for vbucket %d "
-            "because backfill up to seqno %llu is needed but only up to "
-            "%llu is persisted", vbid, endSeqno,
-            lastPersistedSeqno);
-        snooze(UPR_BACKFILL_SLEEP_TIME);
-        return true;
-    }
-
-    KVStore* kvstore = engine->getEpStore()->getAuxUnderlying();
-    size_t numItems = kvstore->getNumItems(stream->getVBucket(), startSeqno,
-                                           std::numeric_limits<uint64_t>::max());
-    static_cast<ActiveStream*>(stream.get())->incrBackfillRemaining(numItems);
-
-    if (numItems > 0) {
-        shared_ptr<Callback<GetValue> >
-            cb(new DiskCallback(stream));
-        shared_ptr<Callback<CacheLookup> >
-            cl(new CacheCallback(engine, stream));
-        shared_ptr<Callback<SeqnoRange> >
-            sr(new SnapshotMarkerCallback(stream));
-        kvstore->dump(vbid, startSeqno, cb, cl, sr);
-    }
-
-    static_cast<ActiveStream*>(stream.get())->completeBackfill();
-
-    return false;
-}
-
-std::string UprBackfill::getDescription() {
-    std::stringstream ss;
-    ss << "Upr backfill for vbucket " << stream->getVBucket();
-    return ss.str();
-}
 
 Stream::Stream(const std::string &name, uint32_t flags, uint32_t opaque,
                uint16_t vb, uint64_t start_seqno, uint64_t end_seqno,
@@ -214,17 +77,17 @@ void Stream::addStats(ADD_STAT add_stat, const void *c) {
     add_casted_stat(buffer, stateName(state_), add_stat, c);
 }
 
-ActiveStream::ActiveStream(EventuallyPersistentEngine* e, UprProducer* p,
-                           const std::string &n, uint32_t flags,
-                           uint32_t opaque, uint16_t vb, uint64_t st_seqno,
-                           uint64_t en_seqno, uint64_t vb_uuid,
-                           uint64_t snap_start_seqno, uint64_t snap_end_seqno)
+ActiveStream::ActiveStream(ActiveStreamCtx* c, const std::string &n,
+                           uint32_t flags, uint32_t opaque, uint16_t vb,
+                           uint64_t st_seqno, uint64_t en_seqno,
+                           uint64_t vb_uuid, uint64_t snap_start_seqno,
+                           uint64_t snap_end_seqno)
     :  Stream(n, flags, opaque, vb, st_seqno, en_seqno, vb_uuid,
               snap_start_seqno, snap_end_seqno),
-       lastReadSeqno(st_seqno), lastSentSeqno(st_seqno), curChkSeqno(st_seqno),
-       takeoverSeqno(0), takeoverState(vbucket_state_pending),
-       backfillRemaining(0), itemsFromBackfill(0), itemsFromMemory(0),
-       engine(e), producer(p), isBackfillTaskRunning(false),
+       ctx(c), lastReadSeqno(st_seqno), lastSentSeqno(st_seqno),
+       curChkSeqno(st_seqno), takeoverSeqno(0),
+       takeoverState(vbucket_state_pending), backfillRemaining(0),
+       itemsFromBackfill(0), itemsFromMemory(0), isBackfillTaskRunning(false),
        isFirstMemoryMarker(true), isFirstSnapshot(true) {
 
     const char* type = "";
@@ -241,7 +104,7 @@ ActiveStream::ActiveStream(EventuallyPersistentEngine* e, UprProducer* p,
     type_ = STREAM_ACTIVE;
 
     LOG(EXTENSION_LOG_WARNING, "%s (vb %d) %sstream created with start seqno "
-        "%llu and end seqno %llu", producer->logHeader(), vb, type, st_seqno,
+        "%llu and end seqno %llu", ctx->logHeader(), vb, type, st_seqno,
         en_seqno);
 }
 
@@ -271,7 +134,7 @@ UprResponse* ActiveStream::next() {
             break;
         default:
             LOG(EXTENSION_LOG_WARNING, "%s (vb %d) Invalid state '%s'",
-                producer->logHeader(), vb_, stateName(state_));
+                ctx->logHeader(), vb_, stateName(state_));
             abort();
     }
 
@@ -290,27 +153,26 @@ void ActiveStream::markDiskSnapshot(uint64_t startSeqno, uint64_t endSeqno) {
     startSeqno = std::min(snap_start_seqno_, startSeqno);
 
     LOG(EXTENSION_LOG_WARNING, "%s (vb %d) Sending disk snapshot with start "
-        "seqno %llu and end seqno %llu", producer->logHeader(), vb_, startSeqno,
+        "seqno %llu and end seqno %llu", ctx->logHeader(), vb_, startSeqno,
         endSeqno);
     readyQ.push(new SnapshotMarker(opaque_, vb_, startSeqno, endSeqno,
                                    MARKER_FLAG_DISK));
-    RCPtr<VBucket> vb = engine->getVBucket(vb_);
-    if (!vb) {
+
+    curChkSeqno = ctx->registerMemoryCursor(endSeqno, end_seqno_, name_);
+    if (curChkSeqno == std::numeric_limits<uint64_t>::max()) {
         endStream(END_STREAM_STATE);
     } else {
         if (endSeqno > end_seqno_) {
             endSeqno = end_seqno_;
         }
         // Only re-register the cursor if we still need to get memory snapshots
-        curChkSeqno = vb->checkpointManager.registerTAPCursorBySeqno(name_,
-                                                                     endSeqno,
-                                                                     end_seqno_);
+        curChkSeqno = ctx->registerMemoryCursor(endSeqno, end_seqno_, name_);
     }
 
     if (!itemsReady) {
         itemsReady = true;
         lh.unlock();
-        producer->notifyStreamReady(vb_, false);
+        ctx->notify(false);
     }
 }
 
@@ -324,7 +186,7 @@ void ActiveStream::backfillReceived(Item* itm) {
         if (!itemsReady) {
             itemsReady = true;
             lh.unlock();
-            producer->notifyStreamReady(vb_, false);
+            ctx->notify(false);
         }
     } else {
         delete itm;
@@ -337,13 +199,13 @@ void ActiveStream::completeBackfill() {
     if (state_ == STREAM_BACKFILLING) {
         isBackfillTaskRunning = false;
         LOG(EXTENSION_LOG_WARNING, "%s (vb %d) Backfill complete, %d items read"
-            " from disk, last seqno read: %ld", producer->logHeader(), vb_,
+            " from disk, last seqno read: %ld", ctx->logHeader(), vb_,
             itemsFromBackfill, lastReadSeqno);
 
         if (!itemsReady) {
             itemsReady = true;
             lh.unlock();
-            producer->notifyStreamReady(vb_, false);
+            ctx->notify(false);
         }
     }
 }
@@ -352,28 +214,26 @@ void ActiveStream::setVBucketStateAckRecieved() {
     LockHolder lh(streamMutex);
     if (state_ == STREAM_TAKEOVER_WAIT) {
         if (takeoverState == vbucket_state_pending) {
-            RCPtr<VBucket> vbucket = engine->getVBucket(vb_);
-            engine->getEpStore()->setVBucketState(vb_, vbucket_state_dead,
-                                                  false, false);
-            takeoverSeqno = vbucket->getHighSeqno();
+            ctx->setVBucketState();
+            takeoverSeqno = ctx->getHighSeqno();
             takeoverState = vbucket_state_active;
             transitionState(STREAM_TAKEOVER_SEND);
             LOG(EXTENSION_LOG_INFO, "%s (vb %d) Receive ack for set vbucket "
-                "state to pending message", producer->logHeader(), vb_);
+                "state to pending message", ctx->logHeader(), vb_);
         } else {
             LOG(EXTENSION_LOG_INFO, "%s (vb %d) Receive ack for set vbucket "
-                "state to active message", producer->logHeader(), vb_);
+                "state to active message", ctx->logHeader(), vb_);
             endStream(END_STREAM_OK);
         }
 
         if (!itemsReady) {
             itemsReady = true;
             lh.unlock();
-            producer->notifyStreamReady(vb_, true);
+            ctx->notify(true);
         }
     } else {
         LOG(EXTENSION_LOG_WARNING, "%s (vb %d) Unexpected ack for set vbucket "
-            "op on stream '%s' state '%s'", producer->logHeader(), vb_,
+            "op on stream '%s' state '%s'", ctx->logHeader(), vb_,
             name_.c_str(), stateName(state_));
     }
 }
@@ -459,9 +319,8 @@ void ActiveStream::addStats(ADD_STAT add_stat, const void *c) {
 void ActiveStream::addTakeoverStats(ADD_STAT add_stat, const void *cookie) {
     LockHolder lh(streamMutex);
 
-    RCPtr<VBucket> vb = engine->getVBucket(vb_);
     add_casted_stat("name", name_, add_stat, cookie);
-    if (!vb || state_ == STREAM_DEAD) {
+    if (state_ == STREAM_DEAD) {
         add_casted_stat("status", "completed", add_stat, cookie);
         add_casted_stat("estimate", 0, add_stat, cookie);
         add_casted_stat("backfillRemaining", 0, add_stat, cookie);
@@ -477,10 +336,8 @@ void ActiveStream::addTakeoverStats(ADD_STAT add_stat, const void *cookie) {
     }
     add_casted_stat("backfillRemaining", backfillRemaining, add_stat, cookie);
 
-    item_eviction_policy_t iep = engine->getEpStore()->getItemEvictionPolicy();
-    size_t vb_items = vb->getNumItems(iep);
-    size_t chk_items = vb_items > 0 ?
-                vb->checkpointManager.getNumItemsForTAPConnection(name_) : 0;
+    size_t vb_items = ctx->getNumVBucketItems();
+    size_t chk_items = vb_items > 0 ? ctx->getNumCheckpointItems(name_) : 0;
 
     if (end_seqno_ < curChkSeqno) {
         chk_items = 0;
@@ -509,15 +366,8 @@ UprResponse* ActiveStream::nextQueuedItem() {
 }
 
 UprResponse* ActiveStream::nextCheckpointItem() {
-    RCPtr<VBucket> vbucket = engine->getVBucket(vb_);
-
-    bool isLast;
     uint64_t snapEnd = 0;
-    queued_item qi = vbucket->checkpointManager.nextItem(name_, isLast, snapEnd);
-
-    if (qi->getOperation() == queue_op_checkpoint_end) {
-        qi = vbucket->checkpointManager.nextItem(name_, isLast, snapEnd);
-    }
+    queued_item qi = ctx->getItemFromMemory(name_, snapEnd);
 
     uint64_t snapStart = qi->getBySeqno();
     if (isFirstSnapshot) {
@@ -566,7 +416,7 @@ void ActiveStream::setDead(end_stream_status_t status) {
     if (!itemsReady && status != END_STREAM_DISCONNECTED) {
         itemsReady = true;
         lh.unlock();
-        producer->notifyStreamReady(vb_, true);
+        ctx->notify(true);
     }
 }
 
@@ -576,7 +426,7 @@ void ActiveStream::notifySeqnoAvailable(uint64_t seqno) {
         if (!itemsReady) {
             itemsReady = true;
             lh.unlock();
-            producer->notifyStreamReady(vb_, true);
+            ctx->notify(true);
         }
     }
 }
@@ -589,21 +439,21 @@ void ActiveStream::endStream(end_stream_status_t reason) {
         transitionState(STREAM_DEAD);
         LOG(EXTENSION_LOG_WARNING, "%s (vb %d) Stream closing, %llu items sent"
             " from disk, %llu items sent from memory, %llu was last seqno sent",
-            producer->logHeader(), vb_, itemsFromBackfill, itemsFromMemory,
+            ctx->logHeader(), vb_, itemsFromBackfill, itemsFromMemory,
             lastSentSeqno);
     }
 }
 
 void ActiveStream::scheduleBackfill() {
     if (!isBackfillTaskRunning) {
-        RCPtr<VBucket> vbucket = engine->getVBucket(vb_);
-        if (!vbucket) {
+        curChkSeqno = ctx->registerMemoryCursor(lastReadSeqno, end_seqno_,
+                                                name_);
+
+        if (curChkSeqno == std::numeric_limits<uint64_t>::max()) {
+            endStream(END_STREAM_STATE);
             return;
         }
 
-        curChkSeqno = vbucket->checkpointManager.registerTAPCursorBySeqno(name_,
-                                                                  lastReadSeqno,
-                                                                    end_seqno_);
 
         cb_assert(lastReadSeqno <= curChkSeqno);
         uint64_t backfillStart = lastReadSeqno + 1;
@@ -615,7 +465,7 @@ void ActiveStream::scheduleBackfill() {
          */
         uint64_t backfillEnd = backfillStart;
         if (flags_ & UPR_ADD_STREAM_FLAG_DISKONLY) { // disk backfill only
-            backfillEnd = vbucket->getHighSeqno();
+            backfillEnd = ctx->getHighSeqno();
         } else { // disk backfill + in-memory streaming
             if (backfillStart < curChkSeqno) {
                 if (curChkSeqno >= end_seqno_) {
@@ -627,9 +477,7 @@ void ActiveStream::scheduleBackfill() {
         }
 
         if (backfillStart < backfillEnd) {
-            ExTask task = new UprBackfill(engine, this, backfillStart, backfillEnd,
-                                          Priority::TapBgFetcherPriority, 0, false);
-            ExecutorPool::get()->schedule(task, AUXIO_TASK_IDX);
+            ctx->scheduleBackfill(this, backfillStart, backfillEnd);
             isBackfillTaskRunning = true;
         } else {
             if (flags_ & UPR_ADD_STREAM_FLAG_TAKEOVER) {
@@ -644,7 +492,7 @@ void ActiveStream::scheduleBackfill() {
 
 void ActiveStream::transitionState(stream_state_t newState) {
     LOG(EXTENSION_LOG_DEBUG, "%s (vb %d) Transitioning from %s to %s",
-        producer->logHeader(), vb_, stateName(state_), stateName(newState));
+        ctx->logHeader(), vb_, stateName(state_), stateName(newState));
 
     if (state_ == newState) {
         return;
@@ -670,7 +518,7 @@ void ActiveStream::transitionState(stream_state_t newState) {
             break;
         default:
             LOG(EXTENSION_LOG_WARNING, "%s (vb %d) Invalid Transition from %s "
-                "to %s", producer->logHeader(), vb_, stateName(state_),
+                "to %s", ctx->logHeader(), vb_, stateName(state_),
                 stateName(newState));
             abort();
     }
@@ -682,28 +530,24 @@ void ActiveStream::transitionState(stream_state_t newState) {
     } else if (newState == STREAM_IN_MEMORY){
         isFirstMemoryMarker = true;
     } else if (newState == STREAM_TAKEOVER_SEND) {
-        takeoverSeqno = engine->getVBucket(vb_)->getHighSeqno();
+        takeoverSeqno = ctx->getHighSeqno();
     } else if (newState == STREAM_DEAD) {
-        RCPtr<VBucket> vb = engine->getVBucket(vb_);
-        if (vb) {
-            vb->checkpointManager.removeTAPCursor(name_);
-        }
+        ctx->removeMemoryCursor(name_);
     }
 }
 
 size_t ActiveStream::getItemsRemaining() {
-    RCPtr<VBucket> vbucket = engine->getVBucket(vb_);
 
-    if (!vbucket) {
+    if (state_ == STREAM_DEAD) {
         return 0;
     }
 
-    uint64_t high_seqno = vbucket->getHighSeqno();
-
-    if (end_seqno_ < high_seqno)
+    uint64_t high_seqno = ctx->getHighSeqno();
+    if (end_seqno_ < high_seqno) {
         return (end_seqno_ - lastSentSeqno);
-    else
-        return (high_seqno - lastSentSeqno);
+    }
+
+    return (high_seqno > lastSentSeqno) ? high_seqno - lastSentSeqno : 0;
 }
 
 NotifierStream::NotifierStream(EventuallyPersistentEngine* e, UprProducer* p,

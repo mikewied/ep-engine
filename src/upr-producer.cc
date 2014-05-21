@@ -24,6 +24,9 @@
 #include "upr-response.h"
 #include "upr-stream.h"
 
+#include "upr-context.h"
+#include "upr-engine-context.h"
+
 bool BufferLog::insert(UprResponse* response) {
     assert(!log_full);
     if (bytes_sent == 0) {
@@ -156,10 +159,12 @@ ENGINE_ERROR_CODE UprProducer::streamRequest(uint32_t flags,
                                               end_seqno, vbucket_uuid,
                                               snap_start_seqno, snap_end_seqno);
     } else {
-        streams[vbucket] = new ActiveStream(&engine_, this, getName(), flags,
-                                            opaque, vbucket, start_seqno,
-                                            end_seqno, vbucket_uuid,
-                                            snap_start_seqno, snap_end_seqno);
+        ActiveStreamCtx* ctx = new ActiveStreamEngineCtx(&engine_, this,
+                                                         vbucket);
+        streams[vbucket] = new ActiveStream(ctx, getName(), flags, opaque,
+                                            vbucket, start_seqno, end_seqno,
+                                            vbucket_uuid, snap_start_seqno,
+                                            snap_end_seqno);
         static_cast<ActiveStream*>(streams[vbucket].get())->setActive();
     }
 

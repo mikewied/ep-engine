@@ -22,6 +22,8 @@
 
 #include <queue>
 
+#include "upr-context.h"
+
 class EventuallyPersistentEngine;
 class MutationResponse;
 class SetVBucketState;
@@ -130,16 +132,16 @@ protected:
 
 class ActiveStream : public Stream {
 public:
-    ActiveStream(EventuallyPersistentEngine* e, UprProducer* p,
-                 const std::string &name, uint32_t flags, uint32_t opaque,
-                 uint16_t vb, uint64_t st_seqno, uint64_t en_seqno,
-                 uint64_t vb_uuid, uint64_t snap_start_seqno,
+    ActiveStream(ActiveStreamCtx* ctx, const std::string &name, uint32_t flags,
+                 uint32_t opaque, uint16_t vb, uint64_t st_seqno,
+                 uint64_t en_seqno, uint64_t vb_uuid, uint64_t snap_start_seqno,
                  uint64_t snap_end_seqno);
 
     ~ActiveStream() {
         LockHolder lh(streamMutex);
         transitionState(STREAM_DEAD);
         clear_UNLOCKED();
+        delete ctx;
     }
 
     UprResponse* next();
@@ -195,6 +197,8 @@ private:
 
     void scheduleBackfill();
 
+    ActiveStreamCtx* ctx;
+
     //! The last sequence number queued from disk or memory
     uint64_t lastReadSeqno;
     //! The last sequence number sent to the network layer
@@ -213,8 +217,6 @@ private:
     //! The amount of items that have been read from memory
     size_t itemsFromMemory;
 
-    EventuallyPersistentEngine* engine;
-    UprProducer* producer;
     bool isBackfillTaskRunning;
     bool isFirstMemoryMarker;
     bool isFirstSnapshot;
