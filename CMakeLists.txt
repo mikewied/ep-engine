@@ -191,7 +191,7 @@ TARGET_LINK_LIBRARIES(ep-engine_failover_table_test cJSON platform)
 
 ADD_EXECUTABLE(ep-engine_upr_stream_test tests/module_tests/upr_stream_test.cc
                         src/upr-stream.cc src/upr-response.cc src/mutex.cc
-                        src/ep_time.c src/item.cc src/testlogger.cc
+                        src/item.cc src/testlogger.cc
                         tests/module_tests/test_memory_tracker.cc
                         ${OBJECTREGISTRY_SOURCE})
 TARGET_LINK_LIBRARIES(ep-engine_upr_stream_test ${SNAPPY_LIBRARIES} platform)
