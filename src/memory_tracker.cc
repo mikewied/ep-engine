@@ -22,9 +22,11 @@
 #include <string>
 #include <utility>
 
+#include "ep_engine.h"
 #include "memory_tracker.h"
 #include "objectregistry.h"
 
+int MemoryTracker::times = 0;
 bool MemoryTracker::tracking = false;
 MemoryTracker *MemoryTracker::instance = NULL;
 
@@ -49,8 +51,13 @@ extern "C" {
     static void NewHook(const void* ptr, size_t) {
         if (ptr != NULL) {
             void* p = const_cast<void*>(ptr);
+
             size_t alloc = getHooksApi()->get_allocation_size(p);
             ObjectRegistry::memoryAllocated(alloc);
+
+            EventuallyPersistentEngine* eng = ObjectRegistry::getCurrentEngine();
+            uint8_t* specific = static_cast<uint8_t*>(p) + (alloc - 8);
+            memcpy(specific, &eng, 8);
         }
     }
 
@@ -59,6 +66,23 @@ extern "C" {
             void* p = const_cast<void*>(ptr);
             size_t alloc = getHooksApi()->get_allocation_size(p);
             ObjectRegistry::memoryDeallocated(alloc);
+
+            uint8_t* specific = static_cast<uint8_t*>(p) + (alloc - 8);
+            EventuallyPersistentEngine* eng = NULL;
+            EventuallyPersistentEngine* cur = ObjectRegistry::getCurrentEngine();
+            memcpy(&eng, specific, 8);
+            if (eng != cur) {
+                const char* aloc_eng = eng ? eng->getName() : "memcached";
+                const char* free_eng = cur ? cur->getName() : "memcached";
+                LOG(EXTENSION_LOG_WARNING, "Invalid free of size %llu, "
+                    "Allocated in %s, freed in %s\n", alloc, aloc_eng, free_eng);
+                if (alloc == 48) {
+                    MemoryTracker::times++;
+                }
+                if (MemoryTracker::times > 200) {
+                    abort();
+                }
+            }
         }
     }
 }

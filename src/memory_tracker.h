@@ -50,6 +50,8 @@ public:
 
     size_t getTotalHeapBytes();
 
+    static int times;
+
 private:
     MemoryTracker();
 

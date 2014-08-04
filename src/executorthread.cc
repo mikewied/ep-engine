@@ -160,11 +160,12 @@ void ExecutorThread::run() {
     state = EXECUTOR_DEAD;
 }
 
-void ExecutorThread::addLogEntry(const std::string &desc,
+void ExecutorThread::addLogEntry(const std::string& desc,
                                  const task_type_t taskType,
                                  const hrtime_t runtime,
                                  rel_time_t t, bool isSlowJob) {
-    TaskLogEntry tle(desc, taskType, runtime, t);
+    std::string test("test");
+    TaskLogEntry tle(test, taskType, runtime, t);
     if (isSlowJob) {
         slowjobs.add(tle);
     } else {

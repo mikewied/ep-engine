@@ -99,7 +99,7 @@ public:
 
     const std::string getStateName();
 
-    void addLogEntry(const std::string &desc, const task_type_t taskType,
+    void addLogEntry(const std::string& desc, const task_type_t taskType,
                      const hrtime_t runtime, rel_time_t startRelTime,
                      bool isSlowJob);
 
