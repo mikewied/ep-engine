@@ -71,10 +71,6 @@ bool VBDeleteTask::run() {
     return !engine->getEpStore()->completeVBucketDeletion(vbucketId, cookie);
 }
 
-bool CompactVBucketTask::run() {
-    return engine->getEpStore()->compactVBucket(vbid, &compactCtx, cookie);
-}
-
 bool StatSnap::run() {
     engine->getEpStore()->snapshotStats();
     if (runOnce) {

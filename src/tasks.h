@@ -41,26 +41,6 @@ class EventuallyPersistentEngine;
 class Flusher;
 class Warmup;
 
-/**
- * Compaction context to perform compaction
- */
-
-typedef struct {
-    uint64_t revSeqno;
-    std::string keyStr;
-} expiredItemCtx;
-
-typedef struct {
-    uint64_t purge_before_ts;
-    uint64_t purge_before_seq;
-    uint64_t max_purged_seq;
-    uint8_t  drop_deletes;
-    uint32_t curr_time;
-    std::list<expiredItemCtx> expiredItems;
-    // Callback required for Bloomfilter
-    BfilterCB *bfcb;
-} compaction_ctx;
-
 class GlobalTask : public RCValue {
 friend class CompareByDueDate;
 friend class CompareByPriority;
@@ -280,35 +260,6 @@ public:
 private:
     uint16_t vbucketId;
     const void* cookie;
-};
-
-/**
- * A task for compacting a vbucket db file
- */
-class CompactVBucketTask : public GlobalTask {
-public:
-    CompactVBucketTask(EventuallyPersistentEngine *e, const Priority &p,
-                uint16_t vbucket, compaction_ctx c, const void *ck,
-                bool completeBeforeShutdown = true) :
-                GlobalTask(e, p, 0, completeBeforeShutdown),
-                           vbid(vbucket), compactCtx(c), cookie(ck)
-    {
-        std::stringstream ss;
-        ss<<"Compact VBucket "<<vbid;
-        desc = ss.str();
-    }
-
-    bool run();
-
-    std::string getDescription() {
-        return desc;
-    }
-
-private:
-    uint16_t vbid;
-    compaction_ctx compactCtx;
-    const void* cookie;
-    std::string desc;
 };
 
 /**

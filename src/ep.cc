@@ -1235,6 +1235,37 @@ ENGINE_ERROR_CODE EventuallyPersistentStore::deleteVBucket(uint16_t vbid,
     return ENGINE_SUCCESS;
 }
 
+/**
+ * A task for compacting a vbucket db file
+ */
+class CompactVBucketTask : public GlobalTask {
+public:
+    CompactVBucketTask(EventuallyPersistentEngine *e, const Priority &p,
+                uint16_t vbucket, compaction_ctx c, const void *ck,
+                bool completeBeforeShutdown = true) :
+                GlobalTask(e, p, 0, completeBeforeShutdown),
+                           vbid(vbucket), compactCtx(c), cookie(ck)
+    {
+        std::stringstream ss;
+        ss<<"Compact VBucket "<<vbid;
+        desc = ss.str();
+    }
+
+    bool run() {
+        return engine->getEpStore()->compactVBucket(vbid, &compactCtx, cookie);
+    }
+
+    std::string getDescription() {
+        return desc;
+    }
+
+private:
+    uint16_t vbid;
+    compaction_ctx compactCtx;
+    const void* cookie;
+    std::string desc;
+};
+
 ENGINE_ERROR_CODE EventuallyPersistentStore::compactDB(uint16_t vbid,
                                                        compaction_ctx c,
                                                        const void *cookie) {

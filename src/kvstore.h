@@ -27,7 +27,6 @@
 #include <vector>
 
 #include "configuration.h"
-#include "tasks.h"
 #include "vbucket.h"
 
 /**
@@ -118,6 +117,27 @@ public:
     const bool noDeletes;
     const bool onlyDeletes;
 };
+
+/**
+ * Compaction context to perform compaction
+ */
+
+typedef struct {
+    uint64_t revSeqno;
+    std::string keyStr;
+} expiredItemCtx;
+
+typedef struct {
+    uint64_t purge_before_ts;
+    uint64_t purge_before_seq;
+    uint64_t max_purged_seq;
+    uint8_t  drop_deletes;
+    uint32_t curr_time;
+    std::list<expiredItemCtx> expiredItems;
+    // Callback required for Bloomfilter
+    BfilterCB *bfcb;
+} compaction_ctx;
+
 
 // First bool is true if an item exists in VB DB file.
 // second bool is true if the operation is SET (i.e., insert or update).
