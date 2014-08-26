@@ -64,7 +64,7 @@ private:
     uint32_t bytes_sent;
 };
 
-class DcpProducer : public Producer {
+class DcpProducer : public ConnHandler, public Notifiable {
 public:
 
     DcpProducer(EventuallyPersistentEngine &e, const void *cookie,
@@ -108,23 +108,11 @@ public:
 
     const char *getType() const;
 
-    bool isTimeForNoop();
-
-    void setTimeForNoop();
-
     void clearQueues();
-
-    void appendQueue(std::list<queued_item> *q);
-
-    size_t getBackfillQueueSize();
 
     size_t getItemsSent();
 
     size_t getTotalBytes();
-
-    bool windowIsFull();
-
-    void flush();
 
     std::list<uint16_t> getVBList(void);
 
@@ -158,6 +146,8 @@ private:
 
     DcpResponse *rejectResp; // stash response for retry if E2BIG was hit
     dcp_stream_type_t streamType;
+
+    Mutex streamLock;
 
     bool notifyOnly;
     rel_time_t lastSendTime;

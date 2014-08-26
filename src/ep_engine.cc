@@ -2849,7 +2849,7 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::processTapAck(const void *cookie,
 
 void EventuallyPersistentEngine::queueBackfill(const VBucketFilter
                                                              &backfillVBFilter,
-                                               Producer *tc)
+                                               TapProducer *tc)
 {
     ExTask backfillTask = new BackfillTask(this, *tapConnMap, tc,
                                            backfillVBFilter);
@@ -3683,7 +3683,7 @@ struct ConnStatBuilder {
         ++aggregator->totalConns;
         tc->addStats(add_stat, cookie);
 
-        Producer *tp = dynamic_cast<Producer*>(tc.get());
+        TapProducer *tp = dynamic_cast<TapProducer*>(tc.get());
         if (tp) {
             ++aggregator->totalProducers;
             tp->aggregateQueueStats(aggregator);
@@ -3724,7 +3724,8 @@ struct ConnAggStatBuilder {
         ConnCounter counter;
 
         ++counter.totalConns;
-        if (dynamic_cast<Producer*>(c.get())) {
+        if (dynamic_cast<TapProducer*>(c.get()) ||
+            dynamic_cast<DcpProducer*>(c.get())) {
             ++counter.totalProducers;
         }
 

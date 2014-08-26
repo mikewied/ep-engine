@@ -176,10 +176,7 @@ public:
 
     virtual void shutdownAllConnections() = 0;
 
-    void updateVBConnections(connection_t &conn,
-                             const std::vector<uint16_t> &vbuckets);
-
-    virtual void removeVBConnections(connection_t &conn);
+    virtual void removeVBConnections(connection_t &conn) = 0;
 
     void addVBConnByVBId(connection_t &conn, int16_t vbid);
 
@@ -294,6 +291,11 @@ public:
     TapConsumer *newConsumer(const void* c);
 
     void manageConnections();
+
+    void updateVBConnections(connection_t &conn,
+                             const std::vector<uint16_t> &vbuckets);
+
+    void removeVBConnections(connection_t &conn);
 
     /**
      * Notify the paused connections that are responsible for replicating

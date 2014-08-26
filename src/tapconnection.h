@@ -779,74 +779,11 @@ private:
     AtomicValue<bool> notifySent;
 };
 
-class Producer : public ConnHandler, public Notifiable {
-public:
-    Producer(EventuallyPersistentEngine &engine, const void* cookie,
-             const std::string& name) :
-        ConnHandler(engine, cookie, name),
-        Notifiable(),
-        vbucketFilter(),
-        totalBackfillBacklogs(0),
-        reconnects(0) {}
-
-    void addStats(ADD_STAT add_stat, const void *c);
-
-    bool isReconnected() const {
-        return reconnects > 0;
-    }
-
-    void reconnected() {
-        ++reconnects;
-    }
-
-    virtual bool isTimeForNoop() = 0;
-
-    virtual void setTimeForNoop() = 0;
-
-    const char *getType() const { return "producer"; }
-
-    virtual void clearQueues() = 0;
-
-    virtual void appendQueue(std::list<queued_item> *q) = 0;
-
-    virtual size_t getBackfillQueueSize() = 0;
-
-    void incrBackfillRemaining(size_t incr) {
-        LockHolder lh(queueLock);
-        totalBackfillBacklogs += incr;
-    }
-
-    virtual void flush() = 0;
-
-    virtual bool windowIsFull() = 0;
-
-    const VBucketFilter &getVBucketFilter() {
-        LockHolder lh(queueLock);
-        return vbucketFilter;
-    }
-
-    virtual ~Producer() {}
-
-protected:
-    friend class ConnMap;
-
-    //! Lock held during queue operations.
-    Mutex queueLock;
-    //! Filter for the vbuckets we want.
-    VBucketFilter vbucketFilter;
-    //! Total backfill backlogs
-    size_t totalBackfillBacklogs;
-
-private:
-    //! Number of times this client reconnected
-    uint32_t reconnects;
-};
-
 /**
  * Class used by the EventuallyPersistentEngine to keep track of all
  * information needed per Tap or DCP connection.
  */
-class TapProducer : public Producer {
+class TapProducer : public ConnHandler, public Notifiable {
 public:
     TapProducer(EventuallyPersistentEngine &engine,
              const void *cookie,
@@ -863,6 +800,8 @@ public:
     virtual void addStats(ADD_STAT add_stat, const void *c);
     virtual void processedEvent(uint16_t event, ENGINE_ERROR_CODE ret);
 
+    const char *getType() const { return "producer"; }
+
     void aggregateQueueStats(ConnCounter* stats_aggregator);
 
     void suspendedConnection_UNLOCKED(bool value);
@@ -870,6 +809,19 @@ public:
 
     bool isTimeForNoop();
     void setTimeForNoop();
+
+    bool isReconnected() const {
+        return reconnects > 0;
+    }
+
+    void reconnected() {
+        ++reconnects;
+    }
+
+    void incrBackfillRemaining(size_t incr) {
+        LockHolder lh(queueLock);
+        totalBackfillBacklogs += incr;
+    }
 
     void completeBackfill() {
         LockHolder lh(queueLock);
@@ -935,6 +887,11 @@ public:
     }
     bool haveFlagByteorderSupport(void) const {
         return flagByteorderSupport;
+    }
+
+    const VBucketFilter &getVBucketFilter() {
+        LockHolder lh(queueLock);
+        return vbucketFilter;
     }
 
     void clearQueues() {
@@ -1319,6 +1276,8 @@ protected:
 
     void clearQueues_UNLOCKED();
 
+    Mutex queueLock;
+
     //! Queue of live stream items that needs to be sent
     std::list<queued_item> *queue;
     //! Live stream queue size
@@ -1353,6 +1312,9 @@ protected:
     bool pendingFlush;
     //! Backfill age for the connection
     uint64_t backfillAge;
+
+    //! Total backfill backlogs
+    size_t totalBackfillBacklogs;
 
     //! Take over and disconnect?
     bool doTakeOver;
@@ -1400,6 +1362,9 @@ protected:
 
     AtomicValue<rel_time_t> lastMsgTime;
 
+    //! Number of times this client reconnected
+    uint32_t reconnects;
+
     bool isLastAckSucceed;
     bool isSeqNumRotated;
 
@@ -1414,6 +1379,9 @@ protected:
     uint8_t *specificData;
     //! Timestamp of backfill start
     time_t backfillTimestamp;
+
+    //! Filter for the vbuckets we want.
+    VBucketFilter vbucketFilter;
 
     DISALLOW_COPY_AND_ASSIGN(TapProducer);
 };

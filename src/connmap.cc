@@ -262,59 +262,6 @@ bool ConnMap::notificationQueueEmpty() {
     return pendingNotifications.empty();
 }
 
-void ConnMap::updateVBConnections(connection_t &conn,
-                                        const std::vector<uint16_t> &vbuckets)
-{
-    Producer *tp = dynamic_cast<Producer*>(conn.get());
-    if (!tp) {
-        return;
-    }
-
-    VBucketFilter new_filter(vbuckets);
-    VBucketFilter diff = tp->getVBucketFilter().filter_diff(new_filter);
-    const std::set<uint16_t> &vset = diff.getVBSet();
-
-    for (std::set<uint16_t>::const_iterator it = vset.begin(); it != vset.end(); ++it) {
-        size_t lock_num = (*it) % vbConnLockNum;
-        SpinLockHolder lh (&vbConnLocks[lock_num]);
-        // Remove the connection that is no longer for a given vbucket
-        if (!tp->vbucketFilter.empty() && tp->vbucketFilter(*it)) {
-            std::list<connection_t> &vb_conns = vbConns[*it];
-            std::list<connection_t>::iterator itr = vb_conns.begin();
-            for (; itr != vb_conns.end(); ++itr) {
-                if (conn->getCookie() == (*itr)->getCookie()) {
-                    vb_conns.erase(itr);
-                    break;
-                }
-            }
-        } else { // Add the connection to the vbucket replicator list.
-            std::list<connection_t> &vb_conns = vbConns[*it];
-            vb_conns.push_back(conn);
-        }
-    }
-}
-
-void ConnMap::removeVBConnections(connection_t &conn) {
-    Producer *tp = dynamic_cast<Producer*>(conn.get());
-    if (!tp) {
-        return;
-    }
-
-    const std::set<uint16_t> &vset = tp->vbucketFilter.getVBSet();
-    for (std::set<uint16_t>::const_iterator it = vset.begin(); it != vset.end(); ++it) {
-        size_t lock_num = (*it) % vbConnLockNum;
-        SpinLockHolder lh (&vbConnLocks[lock_num]);
-        std::list<connection_t> &vb_conns = vbConns[*it];
-        std::list<connection_t>::iterator itr = vb_conns.begin();
-        for (; itr != vb_conns.end(); ++itr) {
-            if (conn->getCookie() == (*itr)->getCookie()) {
-                vb_conns.erase(itr);
-                break;
-            }
-        }
-    }
-}
-
 void ConnMap::addVBConnByVBId(connection_t &conn, int16_t vbid) {
     if (!conn.get()) {
         return;
@@ -533,6 +480,59 @@ void TapConnMap::manageConnections() {
         if (tp) {
             ExTask reapTask = new ConnectionReaperCallback(engine, *this, *ii);
             ExecutorPool::get()->schedule(reapTask, NONIO_TASK_IDX);
+        }
+    }
+}
+
+void TapConnMap::updateVBConnections(connection_t &conn,
+                                        const std::vector<uint16_t> &vbuckets)
+{
+    TapProducer *tp = dynamic_cast<TapProducer*>(conn.get());
+    if (!tp) {
+        return;
+    }
+
+    VBucketFilter new_filter(vbuckets);
+    VBucketFilter diff = tp->getVBucketFilter().filter_diff(new_filter);
+    const std::set<uint16_t> &vset = diff.getVBSet();
+
+    for (std::set<uint16_t>::const_iterator it = vset.begin(); it != vset.end(); ++it) {
+        size_t lock_num = (*it) % vbConnLockNum;
+        SpinLockHolder lh (&vbConnLocks[lock_num]);
+        // Remove the connection that is no longer for a given vbucket
+        if (!tp->vbucketFilter.empty() && tp->vbucketFilter(*it)) {
+            std::list<connection_t> &vb_conns = vbConns[*it];
+            std::list<connection_t>::iterator itr = vb_conns.begin();
+            for (; itr != vb_conns.end(); ++itr) {
+                if (conn->getCookie() == (*itr)->getCookie()) {
+                    vb_conns.erase(itr);
+                    break;
+                }
+            }
+        } else { // Add the connection to the vbucket replicator list.
+            std::list<connection_t> &vb_conns = vbConns[*it];
+            vb_conns.push_back(conn);
+        }
+    }
+}
+
+void TapConnMap::removeVBConnections(connection_t &conn) {
+    TapProducer *tp = dynamic_cast<TapProducer*>(conn.get());
+    if (!tp) {
+        return;
+    }
+
+    const std::set<uint16_t> &vset = tp->vbucketFilter.getVBSet();
+    for (std::set<uint16_t>::const_iterator it = vset.begin(); it != vset.end(); ++it) {
+        size_t lock_num = (*it) % vbConnLockNum;
+        SpinLockHolder lh (&vbConnLocks[lock_num]);
+        std::list<connection_t> &vb_conns = vbConns[*it];
+        std::list<connection_t>::iterator itr = vb_conns.begin();
+        for (; itr != vb_conns.end(); ++itr) {
+            if (conn->getCookie() == (*itr)->getCookie()) {
+                vb_conns.erase(itr);
+                break;
+            }
         }
     }
 }
@@ -1102,7 +1102,7 @@ void DcpConnMap::manageConnections() {
     std::list<connection_t>::iterator it;
     for (it = toNotify.begin(); it != toNotify.end(); ++it) {
         Notifiable *tp =
-            static_cast<Notifiable*>(static_cast<Producer*>((*it).get()));
+            static_cast<Notifiable*>(static_cast<DcpProducer*>((*it).get()));
         if (tp && (*it)->isReserved()) {
             engine.notifyIOComplete((*it)->getCookie(), ENGINE_SUCCESS);
             tp->setNotifySent(true);
@@ -1118,12 +1118,7 @@ void DcpConnMap::manageConnections() {
 }
 
 void DcpConnMap::removeVBConnections(connection_t &conn) {
-    Producer *tp = dynamic_cast<Producer*>(conn.get());
-    if (!tp) {
-        return;
-    }
-
-    DcpProducer *prod = static_cast<DcpProducer*>(tp);
+    DcpProducer *prod = dynamic_cast<DcpProducer*>(conn.get());
     std::list<uint16_t> vblist = prod->getVBList();
     std::list<uint16_t>::iterator it = vblist.begin();
     for (; it != vblist.end(); ++it) {

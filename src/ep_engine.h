@@ -467,7 +467,7 @@ public:
      * Visit the objects and add them to the tap/dcp connecitons queue.
      * @todo this code should honor the backfill time!
      */
-    void queueBackfill(const VBucketFilter &backfillVBFilter, Producer *tc);
+    void queueBackfill(const VBucketFilter &backfillVBFilter, TapProducer *tc);
 
     void notifyIOComplete(const void *cookie, ENGINE_ERROR_CODE status) {
         if (cookie == NULL) {

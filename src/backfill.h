@@ -75,14 +75,14 @@ private:
 };
 
 /**
- * VBucketVisitor to backfill a Producer. This visitor basically performs backfill from memory
- * for only resident items if it needs to schedule a separate disk backfill task because of
- * low resident ratio.
+ * VBucketVisitor to backfill a TapProducer. This visitor basically performs
+ * backfill from memory for only resident items if it needs to schedule a
+ * separate disk backfill task because of low resident ratio.
  */
 class BackFillVisitor : public VBucketVisitor {
 public:
-    BackFillVisitor(EventuallyPersistentEngine *e, TapConnMap &cm, Producer *tc,
-                    const VBucketFilter &backfillVBfilter):
+    BackFillVisitor(EventuallyPersistentEngine *e, TapConnMap &cm,
+                    TapProducer *tc, const VBucketFilter &backfillVBfilter):
         VBucketVisitor(backfillVBfilter), engine(e), connMap(cm),
         name(tc->getName()), connToken(tc->getConnectionToken()), valid(true) {}
 
@@ -121,7 +121,7 @@ private:
 class BackfillTask : public GlobalTask {
 public:
 
-    BackfillTask(EventuallyPersistentEngine *e, TapConnMap &cm, Producer *tc,
+    BackfillTask(EventuallyPersistentEngine *e, TapConnMap &cm, TapProducer *tc,
                  const VBucketFilter &backfillVBFilter):
                  GlobalTask(e, Priority::BackfillTaskPriority, 0, false),
       bfv(new BackFillVisitor(e, cm, tc, backfillVBFilter)), engine(e) {}

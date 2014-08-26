@@ -307,21 +307,11 @@ void ConnHandler::releaseReference(bool force)
     }
 }
 
-void Producer::addStats(ADD_STAT add_stat, const void *c) {
-    ConnHandler::addStats(add_stat, c);
-
-    addStat("paused", isPaused(), add_stat, c);
-    if (reconnects > 0) {
-        addStat("reconnects", reconnects, add_stat, c);
-    }
-}
-
-
 TapProducer::TapProducer(EventuallyPersistentEngine &e,
                          const void *cookie,
                          const std::string &name,
                          uint32_t f):
-    Producer(e, cookie, name),
+    ConnHandler(e, cookie, name),
     queue(NULL),
     queueSize(0),
     flags(f),
@@ -330,6 +320,7 @@ TapProducer::TapProducer(EventuallyPersistentEngine &e,
     recordsSkipped(0),
     pendingFlush(false),
     backfillAge(0),
+    totalBackfillBacklogs(0),
     doTakeOver(false),
     takeOverCompletionPhase(false),
     doRunBackfill(false),
@@ -349,13 +340,15 @@ TapProducer::TapProducer(EventuallyPersistentEngine &e,
     seqnoReceived(e.getTapConfig().getAckInitialSequenceNumber() - 1),
     seqnoAckRequested(e.getTapConfig().getAckInitialSequenceNumber() - 1),
     lastMsgTime(ep_current_time()),
+    reconnects(0),
     isLastAckSucceed(false),
     isSeqNumRotated(false),
     noop(false),
     numNoops(0),
     flagByteorderSupport(false),
     specificData(NULL),
-    backfillTimestamp(0)
+    backfillTimestamp(0),
+    vbucketFilter()
 {
     setLogHeader("TAP (Producer) " + getName() + " -");
     queue = new std::list<queued_item>;
@@ -662,7 +655,7 @@ void TapProducer::rollback() {
  */
 class ResumeCallback : public GlobalTask {
 public:
-    ResumeCallback(EventuallyPersistentEngine &e, Producer *c,
+    ResumeCallback(EventuallyPersistentEngine &e, TapProducer *c,
                    double sleepTime)
         : GlobalTask(&e, Priority::TapResumePriority, sleepTime),
           engine(e), conn(c) {
@@ -1092,7 +1085,7 @@ Item* TapProducer::nextBgFetchedItem_UNLOCKED() {
 }
 
 void TapProducer::addStats(ADD_STAT add_stat, const void *c) {
-    Producer::addStats(add_stat, c);
+    ConnHandler::addStats(add_stat, c);
 
     LockHolder lh(queueLock);
     addStat("qlen", getQueueSize_UNLOCKED(), add_stat, c);
@@ -1105,6 +1098,8 @@ void TapProducer::addStats(ADD_STAT add_stat, const void *c) {
         addStat("rec_skipped", recordsSkipped, add_stat, c);
     }
     addStat("idle", idle_UNLOCKED(), add_stat, c);
+    addStat("paused", isPaused(), add_stat, c);
+    
     addStat("has_queued_item", !emptyQueue_UNLOCKED(), add_stat, c);
     addStat("bg_result_size", bgResultSize, add_stat, c);
     addStat("bg_jobs_issued", bgJobIssued, add_stat, c);
@@ -1129,6 +1124,10 @@ void TapProducer::addStats(ADD_STAT add_stat, const void *c) {
 
     if (backfillAge != 0) {
         addStat("backfill_age", (size_t)backfillAge, add_stat, c);
+    }
+
+    if (reconnects > 0) {
+        addStat("reconnects", reconnects, add_stat, c);
     }
 
     if (supportsAck()) {
