@@ -70,8 +70,8 @@ std::string Processer::getDescription() {
 
 DcpConsumer::DcpConsumer(EventuallyPersistentEngine &engine, const void *cookie,
                          const std::string &name)
-    : Consumer(engine, cookie, name), opaqueCounter(0), processTaskId(0),
-          itemsToProcess(false), lastNoopTime(ep_current_time()), backoffs(0) {
+    : ConnHandler(engine, cookie, name), opaqueCounter(0), processTaskId(0),
+      itemsToProcess(false), lastNoopTime(ep_current_time()), backoffs(0) {
     Configuration& config = engine.getConfiguration();
     streams = new passive_stream_t[config.getMaxVbuckets()];
     setSupportAck(false);
@@ -657,6 +657,10 @@ void DcpConsumer::streamAccepted(uint32_t opaque, uint16_t status, uint8_t* body
         LOG(EXTENSION_LOG_WARNING, "%s No opaque found for add stream response "
             "with opaque %ld", logHeader(), opaque);
     }
+}
+
+const char* DcpConsumer::getType() const {
+    return "consumer";
 }
 
 bool DcpConsumer::isValidOpaque(uint32_t opaque, uint16_t vbucket) {

@@ -26,7 +26,7 @@
 class PassiveStream;
 class DcpResponse;
 
-class DcpConsumer : public Consumer, public Notifiable {
+class DcpConsumer : public ConnHandler, public Notifiable {
 typedef std::map<uint32_t, std::pair<uint32_t, uint16_t> > opaque_map;
 public:
 
@@ -83,6 +83,8 @@ public:
     void addStats(ADD_STAT add_stat, const void *c);
 
     void aggregateQueueStats(ConnCounter* aggregator);
+
+    const char* getType() const;
 
     void notifyStreamReady(uint16_t vbucket);
 

@@ -632,41 +632,6 @@ public:
                                      uint8_t nru = 0xff);
 };
 
-
-/**
- */
-class Consumer : public ConnHandler {
-private:
-    AtomicValue<size_t> numDelete;
-    AtomicValue<size_t> numDeleteFailed;
-    AtomicValue<size_t> numFlush;
-    AtomicValue<size_t> numFlushFailed;
-    AtomicValue<size_t> numMutation;
-    AtomicValue<size_t> numMutationFailed;
-    AtomicValue<size_t> numOpaque;
-    AtomicValue<size_t> numOpaqueFailed;
-    AtomicValue<size_t> numVbucketSet;
-    AtomicValue<size_t> numVbucketSetFailed;
-    AtomicValue<size_t> numCheckpointStart;
-    AtomicValue<size_t> numCheckpointStartFailed;
-    AtomicValue<size_t> numCheckpointEnd;
-    AtomicValue<size_t> numCheckpointEndFailed;
-    AtomicValue<size_t> numUnknown;
-
-public:
-    Consumer(EventuallyPersistentEngine &theEngine, const void* cookie,
-             const std::string& name);
-    virtual void processedEvent(uint16_t event, ENGINE_ERROR_CODE ret);
-    virtual void addStats(ADD_STAT add_stat, const void *c);
-    virtual const char *getType() const { return "consumer"; };
-    virtual void checkVBOpenCheckpoint(uint16_t);
-    void setBackfillPhase(bool isBackfill, uint16_t vbucket);
-    bool isBackfillPhase(uint16_t vbucket);
-    ENGINE_ERROR_CODE setVBucketState(uint32_t opaque, uint16_t vbucket,
-                                      vbucket_state_t state);
-};
-
-
 /*
  * auxIODispatcher/GIO task that performs a background fetch on behalf
  * of TAP/DCP.
@@ -699,31 +664,6 @@ private:
     hrtime_t connToken;
     uint64_t rowid;
     uint16_t vbucket;
-};
-
-
-class TapConsumer : public Consumer {
-public:
-    TapConsumer(EventuallyPersistentEngine &e, const void *c,
-                const std::string &n);
-
-    ~TapConsumer() {}
-
-    ENGINE_ERROR_CODE mutation(uint32_t opaque, const void* key, uint16_t nkey,
-                               const void* value, uint32_t nvalue, uint64_t cas,
-                               uint16_t vbucket, uint32_t flags,
-                               uint8_t datatype, uint32_t locktime,
-                               uint64_t bySeqno, uint64_t revSeqno,
-                               uint32_t exptime, uint8_t nru, const void* meta,
-                               uint16_t nmeta);
-
-    ENGINE_ERROR_CODE deletion(uint32_t opaque, const void* key, uint16_t nkey,
-                               uint64_t cas, uint16_t vbucket, uint64_t bySeqno,
-                               uint64_t revSeqno, const void* meta,
-                               uint16_t nmeta);
-
-    bool processCheckpointCommand(uint8_t event, uint16_t vbucket,
-                                  uint64_t checkpointId);
 };
 
 class Notifiable {
@@ -777,6 +717,56 @@ private:
     AtomicValue<bool> notificationScheduled;
         //! Flag indicating if the pending memcached connection is notified
     AtomicValue<bool> notifySent;
+};
+
+class TapConsumer : public ConnHandler, public Notifiable {
+public:
+    TapConsumer(EventuallyPersistentEngine &e, const void *c,
+                const std::string &n);
+
+    ~TapConsumer() {}
+
+    ENGINE_ERROR_CODE mutation(uint32_t opaque, const void* key, uint16_t nkey,
+                               const void* value, uint32_t nvalue, uint64_t cas,
+                               uint16_t vbucket, uint32_t flags,
+                               uint8_t datatype, uint32_t locktime,
+                               uint64_t bySeqno, uint64_t revSeqno,
+                               uint32_t exptime, uint8_t nru, const void* meta,
+                               uint16_t nmeta);
+
+    ENGINE_ERROR_CODE deletion(uint32_t opaque, const void* key, uint16_t nkey,
+                               uint64_t cas, uint16_t vbucket, uint64_t bySeqno,
+                               uint64_t revSeqno, const void* meta,
+                               uint16_t nmeta);
+
+    bool processCheckpointCommand(uint8_t event, uint16_t vbucket,
+                                  uint64_t checkpointId);
+
+    const char *getType() const { return "consumer"; }
+    void processedEvent(uint16_t event, ENGINE_ERROR_CODE ret);
+    void addStats(ADD_STAT add_stat, const void *c);
+    void checkVBOpenCheckpoint(uint16_t);
+    void setBackfillPhase(bool isBackfill, uint16_t vbucket);
+    bool isBackfillPhase(uint16_t vbucket);
+    ENGINE_ERROR_CODE setVBucketState(uint32_t opaque, uint16_t vbucket,
+                                      vbucket_state_t state);
+
+private:
+    AtomicValue<size_t> numDelete;
+    AtomicValue<size_t> numDeleteFailed;
+    AtomicValue<size_t> numFlush;
+    AtomicValue<size_t> numFlushFailed;
+    AtomicValue<size_t> numMutation;
+    AtomicValue<size_t> numMutationFailed;
+    AtomicValue<size_t> numOpaque;
+    AtomicValue<size_t> numOpaqueFailed;
+    AtomicValue<size_t> numVbucketSet;
+    AtomicValue<size_t> numVbucketSetFailed;
+    AtomicValue<size_t> numCheckpointStart;
+    AtomicValue<size_t> numCheckpointStartFailed;
+    AtomicValue<size_t> numCheckpointEnd;
+    AtomicValue<size_t> numCheckpointEndFailed;
+    AtomicValue<size_t> numUnknown;
 };
 
 /**

@@ -1921,9 +1921,8 @@ Item* TapProducer::getNextItem(const void *c, uint16_t *vbucket, uint16_t &ret,
     return itm;
 }
 
-/******************************* Consumer **************************************/
-Consumer::Consumer(EventuallyPersistentEngine &engine, const void* cookie,
-                   const std::string& name) :
+TapConsumer::TapConsumer(EventuallyPersistentEngine &engine, const void *cookie,
+                         const std::string &name) :
     ConnHandler(engine, cookie, name),
     numDelete(0),
     numDeleteFailed(0),
@@ -1939,161 +1938,7 @@ Consumer::Consumer(EventuallyPersistentEngine &engine, const void* cookie,
     numCheckpointStartFailed(0),
     numCheckpointEnd(0),
     numCheckpointEndFailed(0),
-    numUnknown(0) { }
-
-void Consumer::addStats(ADD_STAT add_stat, const void *c) {
-    ConnHandler::addStats(add_stat, c);
-    addStat("num_delete", numDelete, add_stat, c);
-    addStat("num_delete_failed", numDeleteFailed, add_stat, c);
-    addStat("num_flush", numFlush, add_stat, c);
-    addStat("num_flush_failed", numFlushFailed, add_stat, c);
-    addStat("num_mutation", numMutation, add_stat, c);
-    addStat("num_mutation_failed", numMutationFailed, add_stat, c);
-    addStat("num_opaque", numOpaque, add_stat, c);
-    addStat("num_opaque_failed", numOpaqueFailed, add_stat, c);
-    addStat("num_vbucket_set", numVbucketSet, add_stat, c);
-    addStat("num_vbucket_set_failed", numVbucketSetFailed, add_stat, c);
-    addStat("num_checkpoint_start", numCheckpointStart, add_stat, c);
-    addStat("num_checkpoint_start_failed", numCheckpointStartFailed, add_stat, c);
-    addStat("num_checkpoint_end", numCheckpointEnd, add_stat, c);
-    addStat("num_checkpoint_end_failed", numCheckpointEndFailed, add_stat, c);
-    addStat("num_unknown", numUnknown, add_stat, c);
-}
-
-void Consumer::setBackfillPhase(bool isBackfill, uint16_t vbucket) {
-    const VBucketMap &vbuckets = engine_.getEpStore()->getVBuckets();
-    RCPtr<VBucket> vb = vbuckets.getBucket(vbucket);
-    if (!(vb && supportCheckpointSync_)) {
-        return;
-    }
-
-    vb->setBackfillPhase(isBackfill);
-    if (isBackfill) {
-        // set the open checkpoint id to 0 to indicate the backfill phase.
-        vb->checkpointManager.setOpenCheckpointId(0);
-        // Note that when backfill is started, the destination always resets the vbucket
-        // and its checkpoint datastructure.
-    } else {
-        // If backfill is completed for a given vbucket subscribed by this consumer, schedule
-        // backfill for all TAP connections that are currently replicating that vbucket,
-        // so that replica chain can be synchronized.
-        std::set<uint16_t> backfillVB;
-        backfillVB.insert(vbucket);
-        TapConnMap &tapConnMap = engine_.getTapConnMap();
-        tapConnMap.scheduleBackfill(backfillVB);
-    }
-}
-
-bool Consumer::isBackfillPhase(uint16_t vbucket) {
-    const VBucketMap &vbuckets = engine_.getEpStore()->getVBuckets();
-    RCPtr<VBucket> vb = vbuckets.getBucket(vbucket);
-    if (vb && vb->isBackfillPhase()) {
-        return true;
-    }
-    return false;
-}
-
-ENGINE_ERROR_CODE Consumer::setVBucketState(uint32_t opaque, uint16_t vbucket,
-                                            vbucket_state_t state) {
-
-    (void) opaque;
-
-    if (!is_valid_vbucket_state_t(state)) {
-        LOG(EXTENSION_LOG_WARNING,
-                "%s Received an invalid vbucket state. Force disconnect\n",
-                logHeader());
-        return ENGINE_DISCONNECT;
-    }
-
-    LOG(EXTENSION_LOG_INFO,
-        "%s Received TAP/DCP_VBUCKET_SET with vbucket %d and state \"%s\"\n",
-        logHeader(), vbucket, VBucket::toString(state));
-
-    return engine_.getEpStore()->setVBucketState(vbucket, state, true);
-}
-
-void Consumer::processedEvent(uint16_t event, ENGINE_ERROR_CODE ret)
-{
-    switch (event) {
-    case TAP_ACK:
-        LOG(EXTENSION_LOG_WARNING, "%s Consumer should never recieve a tap ack",
-            logHeader());
-        abort();
-        break;
-
-    case TAP_FLUSH:
-        if (ret == ENGINE_SUCCESS) {
-            ++numFlush;
-        } else {
-            ++numFlushFailed;
-        }
-        break;
-
-    case TAP_DELETION:
-        if (ret == ENGINE_SUCCESS) {
-            ++numDelete;
-        } else {
-            ++numDeleteFailed;
-        }
-        break;
-
-    case TAP_MUTATION:
-        if (ret == ENGINE_SUCCESS) {
-            ++numMutation;
-        } else {
-            ++numMutationFailed;
-        }
-        break;
-
-    case TAP_OPAQUE:
-        if (ret == ENGINE_SUCCESS) {
-            ++numOpaque;
-        } else {
-            ++numOpaqueFailed;
-        }
-        break;
-
-    case TAP_VBUCKET_SET:
-        if (ret == ENGINE_SUCCESS) {
-            ++numVbucketSet;
-        } else {
-            ++numVbucketSetFailed;
-        }
-        break;
-
-    case TAP_CHECKPOINT_START:
-        if (ret == ENGINE_SUCCESS) {
-            ++numCheckpointStart;
-        } else {
-            ++numCheckpointStartFailed;
-        }
-        break;
-
-    case TAP_CHECKPOINT_END:
-        if (ret == ENGINE_SUCCESS) {
-            ++numCheckpointEnd;
-        } else {
-            ++numCheckpointEndFailed;
-        }
-        break;
-
-    default:
-        ++numUnknown;
-    }
-}
-
-void Consumer::checkVBOpenCheckpoint(uint16_t vbucket) {
-    const VBucketMap &vbuckets = engine_.getEpStore()->getVBuckets();
-    RCPtr<VBucket> vb = vbuckets.getBucket(vbucket);
-    if (!vb || vb->getState() == vbucket_state_active) {
-        return;
-    }
-    vb->checkpointManager.checkOpenCheckpoint(false, true);
-}
-
-TapConsumer::TapConsumer(EventuallyPersistentEngine &engine, const void *cookie,
-                         const std::string &name)
-    : Consumer(engine, cookie, name) {
+    numUnknown(0) {
     setSupportAck(true);
     setLogHeader("TAP (Consumer) " + getName() + " -");
 }
@@ -2241,4 +2086,154 @@ ENGINE_ERROR_CODE TapConsumer::deletion(uint32_t opaque, const void* key,
     }
 
     return ret;
+}
+
+void TapConsumer::addStats(ADD_STAT add_stat, const void *c) {
+    ConnHandler::addStats(add_stat, c);
+    addStat("num_delete", numDelete, add_stat, c);
+    addStat("num_delete_failed", numDeleteFailed, add_stat, c);
+    addStat("num_flush", numFlush, add_stat, c);
+    addStat("num_flush_failed", numFlushFailed, add_stat, c);
+    addStat("num_mutation", numMutation, add_stat, c);
+    addStat("num_mutation_failed", numMutationFailed, add_stat, c);
+    addStat("num_opaque", numOpaque, add_stat, c);
+    addStat("num_opaque_failed", numOpaqueFailed, add_stat, c);
+    addStat("num_vbucket_set", numVbucketSet, add_stat, c);
+    addStat("num_vbucket_set_failed", numVbucketSetFailed, add_stat, c);
+    addStat("num_checkpoint_start", numCheckpointStart, add_stat, c);
+    addStat("num_checkpoint_start_failed", numCheckpointStartFailed, add_stat, c);
+    addStat("num_checkpoint_end", numCheckpointEnd, add_stat, c);
+    addStat("num_checkpoint_end_failed", numCheckpointEndFailed, add_stat, c);
+    addStat("num_unknown", numUnknown, add_stat, c);
+}
+
+void TapConsumer::processedEvent(uint16_t event, ENGINE_ERROR_CODE ret)
+{
+    switch (event) {
+    case TAP_ACK:
+        LOG(EXTENSION_LOG_WARNING, "%s Consumer should never recieve a tap ack",
+            logHeader());
+        abort();
+        break;
+
+    case TAP_FLUSH:
+        if (ret == ENGINE_SUCCESS) {
+            ++numFlush;
+        } else {
+            ++numFlushFailed;
+        }
+        break;
+
+    case TAP_DELETION:
+        if (ret == ENGINE_SUCCESS) {
+            ++numDelete;
+        } else {
+            ++numDeleteFailed;
+        }
+        break;
+
+    case TAP_MUTATION:
+        if (ret == ENGINE_SUCCESS) {
+            ++numMutation;
+        } else {
+            ++numMutationFailed;
+        }
+        break;
+
+    case TAP_OPAQUE:
+        if (ret == ENGINE_SUCCESS) {
+            ++numOpaque;
+        } else {
+            ++numOpaqueFailed;
+        }
+        break;
+
+    case TAP_VBUCKET_SET:
+        if (ret == ENGINE_SUCCESS) {
+            ++numVbucketSet;
+        } else {
+            ++numVbucketSetFailed;
+        }
+        break;
+
+    case TAP_CHECKPOINT_START:
+        if (ret == ENGINE_SUCCESS) {
+            ++numCheckpointStart;
+        } else {
+            ++numCheckpointStartFailed;
+        }
+        break;
+
+    case TAP_CHECKPOINT_END:
+        if (ret == ENGINE_SUCCESS) {
+            ++numCheckpointEnd;
+        } else {
+            ++numCheckpointEndFailed;
+        }
+        break;
+
+    default:
+        ++numUnknown;
+    }
+}
+
+void TapConsumer::checkVBOpenCheckpoint(uint16_t vbucket) {
+    const VBucketMap &vbuckets = engine_.getEpStore()->getVBuckets();
+    RCPtr<VBucket> vb = vbuckets.getBucket(vbucket);
+    if (!vb || vb->getState() == vbucket_state_active) {
+        return;
+    }
+    vb->checkpointManager.checkOpenCheckpoint(false, true);
+}
+
+void TapConsumer::setBackfillPhase(bool isBackfill, uint16_t vbucket) {
+    const VBucketMap &vbuckets = engine_.getEpStore()->getVBuckets();
+    RCPtr<VBucket> vb = vbuckets.getBucket(vbucket);
+    if (!(vb && supportCheckpointSync_)) {
+        return;
+    }
+
+    vb->setBackfillPhase(isBackfill);
+    if (isBackfill) {
+        // set the open checkpoint id to 0 to indicate the backfill phase.
+        vb->checkpointManager.setOpenCheckpointId(0);
+        // Note that when backfill is started, the destination always resets the vbucket
+        // and its checkpoint datastructure.
+    } else {
+        // If backfill is completed for a given vbucket subscribed by this consumer, schedule
+        // backfill for all TAP connections that are currently replicating that vbucket,
+        // so that replica chain can be synchronized.
+        std::set<uint16_t> backfillVB;
+        backfillVB.insert(vbucket);
+        TapConnMap &tapConnMap = engine_.getTapConnMap();
+        tapConnMap.scheduleBackfill(backfillVB);
+    }
+}
+
+bool TapConsumer::isBackfillPhase(uint16_t vbucket) {
+    const VBucketMap &vbuckets = engine_.getEpStore()->getVBuckets();
+    RCPtr<VBucket> vb = vbuckets.getBucket(vbucket);
+    if (vb && vb->isBackfillPhase()) {
+        return true;
+    }
+    return false;
+}
+
+ENGINE_ERROR_CODE TapConsumer::setVBucketState(uint32_t opaque, uint16_t vbucket,
+                                               vbucket_state_t state) {
+
+    (void) opaque;
+
+    if (!is_valid_vbucket_state_t(state)) {
+        LOG(EXTENSION_LOG_WARNING,
+                "%s Received an invalid vbucket state. Force disconnect\n",
+                logHeader());
+        return ENGINE_DISCONNECT;
+    }
+
+    LOG(EXTENSION_LOG_INFO,
+        "%s Received TAP/DCP_VBUCKET_SET with vbucket %d and state \"%s\"\n",
+        logHeader(), vbucket, VBucket::toString(state));
+
+    return engine_.getEpStore()->setVBucketState(vbucket, state, true);
 }

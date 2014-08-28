@@ -124,8 +124,6 @@ public:
 
     void initialize(conn_notifier_type ntype);
 
-    Consumer *newConsumer(const void* c);
-
     /**
      * Disconnect a connection by its cookie.
      */
