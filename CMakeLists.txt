@@ -127,7 +127,7 @@ ADD_LIBRARY(ep SHARED
             ${CMAKE_CURRENT_BINARY_DIR}/src/stats-info.c
             src/stored-value.cc src/tapconnection.cc src/connmap.cc
             src/tapthrottle.cc src/tasks.cc
-            src/taskqueue.cc
+            src/taskqueue.cc src/connection.cc
             src/dcp-response.cc src/dcp-consumer.cc
             src/dcp-producer.cc src/dcp-stream.cc src/vbucket.cc
             src/vbucketmap.cc src/warmup.cc

@@ -31,17 +31,21 @@
 #include <string>
 
 #include "configuration.h"
+#include "connection.h"
 #include "ep.h"
 #include "ep-engine/command_ids.h"
 #include "item_pager.h"
 #include "kvstore.h"
 #include "locks.h"
-#include "tapconnection.h"
 #include "workload.h"
 
 
+class ConnHandler;
 class DcpConnMap;
 class TapConnMap;
+class TapConfig;
+class TapConsumer;
+class TapProducer;
 class TapThrottle;
 
 extern "C" {

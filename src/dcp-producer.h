@@ -20,7 +20,7 @@
 
 #include "config.h"
 
-#include "tapconnection.h"
+#include "connection.h"
 #include "dcp-stream.h"
 
 class DcpResponse;

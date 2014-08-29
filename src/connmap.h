@@ -31,6 +31,7 @@
 #include "locks.h"
 #include "syncobject.h"
 #include "atomicqueue.h"
+#include "tapconnection.h"
 
 // Forward declaration
 class ConnNotifier;
