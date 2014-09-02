@@ -2413,7 +2413,7 @@ bool EventuallyPersistentEngine::createTapQueue(const void *cookie,
 
     std::string tapName = "eq_tapq:";
     if (client.length() == 0) {
-        tapName.assign(ConnHandler::getAnonName());
+        tapName.assign(TapConnection::getAnonName());
     } else {
         tapName.append(client);
     }
@@ -2526,7 +2526,7 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::tapNotify(const void *cookie,
 {
     (void) ttl;
     void *specific = getEngineSpecific(cookie);
-    ConnHandler *connection = NULL;
+    TapConnection *connection = NULL;
     if (specific == NULL) {
         if (tap_event == TAP_ACK) {
             LOG(EXTENSION_LOG_WARNING, "Tap producer with cookie %s does not "
@@ -2544,7 +2544,7 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::tapNotify(const void *cookie,
             storeEngineSpecific(cookie, connection);
         }
     } else {
-        connection = reinterpret_cast<ConnHandler *>(specific);
+        connection = reinterpret_cast<TapConnection *>(specific);
     }
 
     std::string k(static_cast<const char*>(key), nkey);

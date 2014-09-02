@@ -147,10 +147,6 @@ public:
     virtual ENGINE_ERROR_CODE handleResponse(
                                         protocol_binary_response_header *resp);
 
-    EventuallyPersistentEngine& engine() {
-        return engine_;
-    }
-
     const char* logHeader() {
         return logString.c_str();
     }
@@ -160,22 +156,6 @@ public:
     }
 
     void releaseReference(bool force = false);
-
-    void setSupportAck(bool ack) {
-        supportAck = ack;
-    }
-
-    bool supportsAck() const {
-        return supportAck;
-    }
-
-    void setSupportCheckpointSync(bool checkpointSync) {
-        supportCheckpointSync_ = checkpointSync;
-    }
-
-    bool supportsCheckpointSync() const {
-        return supportCheckpointSync_;
-    }
 
     virtual const char *getType() const = 0;
 
@@ -197,11 +177,6 @@ public:
 
     virtual void aggregateQueueStats(ConnCounter* stats_aggregator) {
         // Empty
-    }
-
-    virtual void processedEvent(uint16_t event, ENGINE_ERROR_CODE ret) {
-        (void) event;
-        (void) ret;
     }
 
     const std::string &getName() const {
@@ -227,14 +202,6 @@ public:
 
     void setCookie(const void *c) {
         cookie = c;
-    }
-
-    void setExpiryTime(rel_time_t t) {
-        expiryTime = t;
-    }
-
-    rel_time_t getExpiryTime() {
-        return expiryTime;
     }
 
     void setLastWalkTime() {
@@ -264,22 +231,9 @@ public:
         disconnect = val;
     }
 
-    static std::string getAnonName() {
-        uint64_t nextConnId = counter_++;
-        std::stringstream s;
-        s << "eq_tapq:anon_";
-        s << nextConnId;
-        return s.str();
-    }
-
-    hrtime_t getConnectionToken() const {
-        return connToken;
-    }
-
 protected:
     EventuallyPersistentEngine &engine_;
     EPStats &stats;
-    bool supportCheckpointSync_;
 
 private:
 
@@ -295,9 +249,6 @@ private:
     //! Whether or not the connection is reserved in the memcached layer
     AtomicValue<bool> reserved;
 
-    //! Connection token created at connection instantiation time
-    hrtime_t connToken;
-
     //! Connection creation time
     rel_time_t created;
 
@@ -312,15 +263,6 @@ private:
 
     //! Number of times this connection was disconnected
     AtomicValue<size_t> numDisconnects;
-
-    //! when this tap conneciton expires.
-    rel_time_t expiryTime;
-
-    //! Whether or not this connection supports acking
-    bool supportAck;
-
-    //! A counter used to generate unique names
-    static AtomicValue<uint64_t> counter_;
 };
 
 class Notifiable {

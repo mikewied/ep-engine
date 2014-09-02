@@ -29,7 +29,7 @@
 #include "vbucket.h"
 
 
-AtomicValue<uint64_t> ConnHandler::counter_(1);
+AtomicValue<uint64_t> TapConnection::counter_(1);
 
 const short int TapEngineSpecific::sizeRevSeqno(8);
 const short int TapEngineSpecific::sizeExtra(1);
@@ -151,7 +151,7 @@ TapProducer::TapProducer(EventuallyPersistentEngine &e,
                          const void *cookie,
                          const std::string &name,
                          uint32_t f):
-    ConnHandler(e, cookie, name),
+    TapConnection(e, cookie, name),
     queue(NULL),
     queueSize(0),
     flags(f),
@@ -431,7 +431,7 @@ void TapProducer::rollback() {
         case TAP_DELETION:
         case TAP_MUTATION:
             {
-                if (supportCheckpointSync_) {
+                if (supportsCheckpointSync()) {
                     std::map<uint16_t, CheckpointState>::iterator map_it =
                         checkpointState_.find(i->vbucket_);
                     if (map_it != checkpointState_.end()) {
@@ -575,7 +575,7 @@ void TapProducer::reschedule_UNLOCKED(const std::list<TapLogElement>::iterator &
     case TAP_DELETION:
     case TAP_MUTATION:
         {
-            if (supportCheckpointSync_) {
+            if (supportsCheckpointSync()) {
                 std::map<uint16_t, CheckpointState>::iterator map_it =
                     checkpointState_.find(iter->vbucket_);
                 if (map_it != checkpointState_.end()) {
@@ -644,7 +644,7 @@ ENGINE_ERROR_CODE TapProducer::processAck(uint32_t s,
             // If this ACK is for TAP_CHECKPOINT messages, indicate that the checkpoint
             // is synced between the master and slave nodes.
             if ((iter->event_ == TAP_CHECKPOINT_START || iter->event_ == TAP_CHECKPOINT_END)
-                && supportCheckpointSync_) {
+                && supportsCheckpointSync()) {
                 std::map<uint16_t, CheckpointState>::iterator map_it =
                     checkpointState_.find(iter->vbucket_);
                 if (iter->event_ == TAP_CHECKPOINT_END && map_it != checkpointState_.end()) {
@@ -861,7 +861,7 @@ const char *TapProducer::opaqueCmdToString(uint32_t opaque_code) {
 }
 
 void TapProducer::queueBGFetch_UNLOCKED(const std::string &key, uint64_t id, uint16_t vb) {
-    ExTask task = new BGFetchCallback(&engine(), getName(), key, vb, id,
+    ExTask task = new BGFetchCallback(&engine_, getName(), key, vb, id,
                                       getConnectionToken(),
                                       Priority::TapBgFetcherPriority, 0);
     ExecutorPool::get()->schedule(task, AUXIO_TASK_IDX);
@@ -1074,7 +1074,7 @@ queued_item TapProducer::nextFgFetched_UNLOCKED(bool &shouldPause) {
             switch(qi->getOperation()) {
             case queue_op_set:
             case queue_op_del:
-                if (supportCheckpointSync_ && isLastItem) {
+                if (supportsCheckpointSync() && isLastItem) {
                     it->second.lastItem = true;
                 } else {
                     it->second.lastItem = false;
@@ -1084,14 +1084,14 @@ queued_item TapProducer::nextFgFetched_UNLOCKED(bool &shouldPause) {
             case queue_op_checkpoint_start:
                 {
                     it->second.currentCheckpointId = qi->getRevSeqno();
-                    if (supportCheckpointSync_) {
+                    if (supportsCheckpointSync()) {
                         it->second.state = checkpoint_start;
                         addCheckpointMessage_UNLOCKED(qi);
                     }
                 }
                 break;
             case queue_op_checkpoint_end:
-                if (supportCheckpointSync_) {
+                if (supportsCheckpointSync()) {
                     it->second.state = checkpoint_end;
                     uint32_t seqno_acked;
                     if (seqnoReceived == 0) {
@@ -1441,7 +1441,7 @@ void TapProducer::evaluateFlags()
         VBucketEvent event(TAP_OPAQUE, 0,
                            (vbucket_state_t)htonl(TAP_OPAQUE_ENABLE_CHECKPOINT_SYNC));
         addVBucketHighPriority(event);
-        supportCheckpointSync_ = true;
+        setSupportCheckpointSync(true);
         ss << ",checkpoints";
     }
 
@@ -1467,7 +1467,7 @@ bool TapProducer::requestAck(uint16_t event, uint16_t vbucket) {
     }
 
     bool explicitEvent = false;
-    if (supportCheckpointSync_ && (event == TAP_MUTATION || event == TAP_DELETION)) {
+    if (supportsCheckpointSync() && (event == TAP_MUTATION || event == TAP_DELETION)) {
         std::map<uint16_t, CheckpointState>::iterator map_it =
             checkpointState_.find(vbucket);
         if (map_it != checkpointState_.end()) {
@@ -1763,7 +1763,7 @@ Item* TapProducer::getNextItem(const void *c, uint16_t *vbucket, uint16_t &ret,
 
 TapConsumer::TapConsumer(EventuallyPersistentEngine &engine, const void *cookie,
                          const std::string &name) :
-    ConnHandler(engine, cookie, name),
+    TapConnection(engine, cookie, name),
     numDelete(0),
     numDeleteFailed(0),
     numFlush(0),
@@ -1875,7 +1875,7 @@ ENGINE_ERROR_CODE TapConsumer::mutation(uint32_t opaque, const void* key,
         }
     }
 
-    if (!supportCheckpointSync_) {
+    if (!supportsCheckpointSync()) {
         checkVBOpenCheckpoint(vbucket);
     }
 
@@ -1919,7 +1919,7 @@ ENGINE_ERROR_CODE TapConsumer::deletion(uint32_t opaque, const void* key,
         vb->setCurrentSnapshot(bySeqno, bySeqno);
     }
 
-    if (!supportCheckpointSync_) {
+    if (!supportsCheckpointSync()) {
         // If the checkpoint synchronization is not supported,
         // check if a new checkpoint should be created or not.
         checkVBOpenCheckpoint(vbucket);
@@ -2029,7 +2029,7 @@ void TapConsumer::checkVBOpenCheckpoint(uint16_t vbucket) {
 void TapConsumer::setBackfillPhase(bool isBackfill, uint16_t vbucket) {
     const VBucketMap &vbuckets = engine_.getEpStore()->getVBuckets();
     RCPtr<VBucket> vb = vbuckets.getBucket(vbucket);
-    if (!(vb && supportCheckpointSync_)) {
+    if (!(vb && supportsCheckpointSync())) {
         return;
     }
 

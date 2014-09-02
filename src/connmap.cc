@@ -307,7 +307,7 @@ TapConnMap::TapConnMap(EventuallyPersistentEngine &e)
 TapConsumer *TapConnMap::newConsumer(const void* cookie)
 {
     LockHolder lh(connsLock);
-    TapConsumer *tc = new TapConsumer(engine, cookie, ConnHandler::getAnonName());
+    TapConsumer *tc = new TapConsumer(engine, cookie, TapConnection::getAnonName());
     connection_t tap(tc);
     LOG(EXTENSION_LOG_INFO, "%s created", tap->logHeader());
     all.push_back(tap);
@@ -347,7 +347,7 @@ TapProducer *TapConnMap::newProducer(const void* cookie,
         if (tapKeepAlive == 0 || (producer->mayCompleteDumpOrTakeover() && producer->idle())) {
             LOG(EXTENSION_LOG_INFO,
                 "%s keep alive timed out, should be nuked", producer->logHeader());
-            producer->setName(ConnHandler::getAnonName());
+            producer->setName(TapConnection::getAnonName());
             producer->setDisconnect(true);
             producer->setConnected(false);
             producer->setPaused(true);
@@ -364,7 +364,7 @@ TapProducer *TapConnMap::newProducer(const void* cookie,
             // dliao: TODO no need to deal with tap or dcp separately here for the dummy?
             TapProducer *n = new TapProducer(engine,
                                              old_cookie,
-                                             ConnHandler::getAnonName(),
+                                             TapConnection::getAnonName(),
                                              0);
             n->setDisconnect(true);
             n->setConnected(false);
@@ -784,18 +784,17 @@ void TapConnMap::disconnect(const void *cookie) {
         if (iter->second.get()) {
             rel_time_t now = ep_current_time();
             TapConsumer *tc = dynamic_cast<TapConsumer*>(iter->second.get());
-            if (tc || iter->second->doDisconnect()) {
-                iter->second->setExpiryTime(now - 1);
-                LOG(EXTENSION_LOG_WARNING, "%s disconnected",
-                    iter->second->logHeader());
+            if (tc || tc->doDisconnect()) {
+                tc->setExpiryTime(now - 1);
+                LOG(EXTENSION_LOG_WARNING, "%s disconnected", tc->logHeader());
             }
             else { // must be producer
-                iter->second->setExpiryTime(now + tapKeepAlive);
+                tc->setExpiryTime(now + tapKeepAlive);
                 LOG(EXTENSION_LOG_WARNING,
                     "%s disconnected, keep alive for %d seconds",
-                    iter->second->logHeader(), tapKeepAlive);
+                    tc->logHeader(), tapKeepAlive);
             }
-            iter->second->setConnected(false);
+            tc->setConnected(false);
         }
         else {
             LOG(EXTENSION_LOG_WARNING,
@@ -816,7 +815,7 @@ bool TapConnMap::closeConnectionByName_UNLOCKED(const std::string &name) {
             removeTapCursors_UNLOCKED(tp);
 
             tp->setExpiryTime(ep_current_time() - 1);
-            tp->setName(ConnHandler::getAnonName());
+            tp->setName(TapConnection::getAnonName());
             tp->setDisconnect(true);
             tp->setPaused(true);
             rv = true;
@@ -839,7 +838,7 @@ void TapConnMap::getExpiredConnections_UNLOCKED(std::list<connection_t> &deadCli
         TapProducer *tp = dynamic_cast<TapProducer*>(tc.get());
 
         bool is_dead = false;
-        if (tc->getExpiryTime() <= now && !mapped(tc)) {
+        if (tp->getExpiryTime() <= now && !mapped(tc)) {
             if (tp) {
                 if (!tp->isSuspended()) {
                     deadClients.push_back(tc);

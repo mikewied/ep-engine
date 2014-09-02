@@ -350,7 +350,73 @@ private:
     uint16_t vbucket;
 };
 
-class TapConsumer : public ConnHandler, public Notifiable {
+class TapConnection : public ConnHandler {
+public:
+    TapConnection(EventuallyPersistentEngine &e, const void *c,
+                const std::string &n)
+    : ConnHandler(e, c, n),
+      supportCheckpointSync_(false),
+      connToken(gethrtime()),
+      supportAck(false),
+      expiryTime((rel_time_t)-1) {}
+
+    virtual void processedEvent(uint16_t event, ENGINE_ERROR_CODE ret) = 0;
+
+    void setSupportAck(bool ack) {
+        supportAck = ack;
+    }
+
+    bool supportsAck() const {
+        return supportAck;
+    }
+
+    void setExpiryTime(rel_time_t t) {
+        expiryTime = t;
+    }
+
+    rel_time_t getExpiryTime() {
+        return expiryTime;
+    }
+
+    void setSupportCheckpointSync(bool checkpointSync) {
+        supportCheckpointSync_ = checkpointSync;
+    }
+
+    bool supportsCheckpointSync() const {
+        return supportCheckpointSync_;
+    }
+
+    hrtime_t getConnectionToken() const {
+        return connToken;
+    }
+
+    static std::string getAnonName() {
+        uint64_t nextConnId = counter_++;
+        std::stringstream s;
+        s << "eq_tapq:anon_";
+        s << nextConnId;
+        return s.str();
+    }
+
+private:
+
+    //! Whether or not we support checkpoint sync'ing
+    bool supportCheckpointSync_;
+
+    //! Connection token created at connection instantiation time
+    hrtime_t connToken;
+
+    //! Whether or not this connection supports acking
+    bool supportAck;
+
+    //! when this tap conneciton expires.
+    rel_time_t expiryTime;
+
+    //! A counter used to generate unique names
+    static AtomicValue<uint64_t> counter_;
+};
+
+class TapConsumer : public TapConnection, public Notifiable {
 public:
     TapConsumer(EventuallyPersistentEngine &e, const void *c,
                 const std::string &n);
@@ -404,7 +470,7 @@ private:
  * Class used by the EventuallyPersistentEngine to keep track of all
  * information needed per Tap or DCP connection.
  */
-class TapProducer : public ConnHandler, public Notifiable {
+class TapProducer : public TapConnection, public Notifiable {
 public:
     TapProducer(EventuallyPersistentEngine &engine,
              const void *cookie,

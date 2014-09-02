@@ -44,7 +44,6 @@ DcpProducer::DcpProducer(EventuallyPersistentEngine &e, const void *cookie,
       lastSendTime(ep_current_time()),
        log(NULL), itemsSent(0),
       totalBytesSent(0), ackedBytes(0) {
-    setSupportAck(true);
     setReserved(true);
 
     if (notifyOnly) {

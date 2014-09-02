@@ -27,18 +27,14 @@ ConnHandler::ConnHandler(EventuallyPersistentEngine& e, const void* c,
                          const std::string& n) :
     engine_(e),
     stats(engine_.getEpStats()),
-    supportCheckpointSync_(false),
     name(n),
     cookie(c),
     reserved(false),
-    connToken(gethrtime()),
     created(ep_current_time()),
     lastWalkTime(0),
     disconnect(false),
     connected(true),
-    numDisconnects(0),
-    expiryTime((rel_time_t)-1),
-    supportAck(false) {}
+    numDisconnects(0) {}
 
 ENGINE_ERROR_CODE ConnHandler::addStream(uint32_t opaque, uint16_t,
                                          uint32_t flags) {
@@ -180,7 +176,7 @@ void ConnHandler::addStats(ADD_STAT add_stat, const void *c) {
     addStat("created", created, add_stat, c);
     addStat("connected", connected, add_stat, c);
     addStat("pending_disconnect", disconnect, add_stat, c);
-    addStat("supports_ack", supportAck, add_stat, c);
+    //addStat("supports_ack", supportAck, add_stat, c);
     addStat("reserved", reserved.load(), add_stat, c);
 
     if (numDisconnects > 0) {

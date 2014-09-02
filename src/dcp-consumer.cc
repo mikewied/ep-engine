@@ -74,7 +74,6 @@ DcpConsumer::DcpConsumer(EventuallyPersistentEngine &engine, const void *cookie,
       itemsToProcess(false), lastNoopTime(ep_current_time()), backoffs(0) {
     Configuration& config = engine.getConfiguration();
     streams = new passive_stream_t[config.getMaxVbuckets()];
-    setSupportAck(false);
     setLogHeader("DCP (Consumer) " + getName() + " -");
     setReserved(true);
 
