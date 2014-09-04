@@ -25,6 +25,14 @@
 
 class DcpResponse;
 
+typedef enum {
+    DCP_REPLICA_STREAM,
+    DCP_NOTIFIER_STREAM,
+    DCP_XDCR_STREAM,
+    DCP_VIEWS_STREAM,
+    DCP_UNKNOWN_STREAM
+} dcp_stream_type_t;
+
 class BufferLog {
 public:
     BufferLog(uint32_t bytes)
@@ -119,6 +127,8 @@ public:
 
     void flush();
 
+    void updateTimingStats(int batch_size);
+
     std::list<uint16_t> getVBList(void);
 
     /**
@@ -152,6 +162,7 @@ private:
     DcpResponse *rejectResp; // stash response for retry if E2BIG was hit
 
     bool notifyOnly;
+    dcp_stream_type_t streamType;
     rel_time_t lastSendTime;
     BufferLog* log;
     std::list<uint16_t> ready;

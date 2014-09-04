@@ -4093,6 +4093,20 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::doTimingStats(const void *cookie,
     return ENGINE_SUCCESS;
 }
 
+ENGINE_ERROR_CODE EventuallyPersistentEngine::doDcpTimings(const void *cookie,
+                                                           ADD_STAT add_stat) {
+    add_casted_stat("replication_batch_size", stats.replicationBatchHisto,
+                    add_stat, cookie);
+    add_casted_stat("notifier_batch_size", stats.notifierBatchHisto,
+                    add_stat, cookie);
+    add_casted_stat("xdcr_batch_size", stats.xdcrBatchHisto,
+                    add_stat, cookie);
+    add_casted_stat("views_batch_size", stats.viewsBatchHisto,
+                    add_stat, cookie);
+
+    return ENGINE_SUCCESS;
+}
+
 ENGINE_ERROR_CODE EventuallyPersistentEngine::doSchedulerStats(const void
                                                                 *cookie,
                                                                 ADD_STAT
@@ -4319,7 +4333,7 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::getStats(const void* cookie,
                                                        ADD_STAT add_stat) {
     BlockTimer timer(&stats.getStatsCmdHisto);
     if (stat_key != NULL) {
-        LOG(EXTENSION_LOG_DEBUG, "stats %s %d", stat_key, nkey);
+        LOG(EXTENSION_LOG_WARNING, "stats %s %d", stat_key, nkey);
     } else {
         LOG(EXTENSION_LOG_DEBUG, "stats engine");
     }
@@ -4351,6 +4365,8 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::getStats(const void* cookie,
         rv = doCheckpointStats(cookie, add_stat, stat_key, nkey);
     } else if (nkey == 7 && strncmp(stat_key, "timings", 7) == 0) {
         rv = doTimingStats(cookie, add_stat);
+    } else if (nkey == 11 && strncmp(stat_key, "dcp-timings", 11) == 0) {
+        rv = doDcpTimings(cookie, add_stat);
     } else if (nkey == 10 && strncmp(stat_key, "dispatcher", 10) == 0) {
         rv = doDispatcherStats(cookie, add_stat);
     } else if (nkey == 9 && strncmp(stat_key, "scheduler", 9) == 0) {

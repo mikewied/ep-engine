@@ -40,7 +40,8 @@ void BufferLog::free(uint32_t bytes_to_free) {
 DcpProducer::DcpProducer(EventuallyPersistentEngine &e, const void *cookie,
                          const std::string &name, bool isNotifier)
     : Producer(e, cookie, name), rejectResp(NULL),
-      notifyOnly(isNotifier), lastSendTime(ep_current_time()), log(NULL),
+      notifyOnly(isNotifier), streamType(DCP_UNKNOWN_STREAM),
+      lastSendTime(ep_current_time()), log(NULL),
       itemsSent(0), totalBytesSent(0), ackedBytes(0) {
     setSupportAck(true);
     setReserved(true);
@@ -53,11 +54,20 @@ DcpProducer::DcpProducer(EventuallyPersistentEngine &e, const void *cookie,
 
     if (getName().find("replication") != std::string::npos) {
         engine_.setDCPPriority(getCookie(), CONN_PRIORITY_HIGH);
+        streamType = DCP_REPLICA_STREAM;
+    } else if (getName().find("notifier") != std::string::npos) {
+        engine_.setDCPPriority(getCookie(), CONN_PRIORITY_MED);
+        streamType = DCP_NOTIFIER_STREAM;
     } else if (getName().find("xdcr") != std::string::npos) {
         engine_.setDCPPriority(getCookie(), CONN_PRIORITY_MED);
+        streamType = DCP_XDCR_STREAM;
     } else if (getName().find("views") != std::string::npos) {
         engine_.setDCPPriority(getCookie(), CONN_PRIORITY_MED);
+        streamType = DCP_VIEWS_STREAM;
     }
+
+    LOG(EXTENSION_LOG_WARNING, "Connection %s classified as %d", getName().c_str(),
+        streamType);
 }
 
 DcpProducer::~DcpProducer() {
@@ -220,6 +230,7 @@ ENGINE_ERROR_CODE DcpProducer::step(struct dcp_message_producers* producers) {
         resp = getNextItem();
     }
     if (!resp) {
+        updateTimingStats(0);
         return ENGINE_SUCCESS;
     }
 
@@ -291,6 +302,8 @@ ENGINE_ERROR_CODE DcpProducer::step(struct dcp_message_producers* producers) {
         delete itmCpy;
     }
 
+    updateTimingStats(1);
+
     if (ret == ENGINE_E2BIG) {
         rejectResp = resp;
     } else {
@@ -299,6 +312,18 @@ ENGINE_ERROR_CODE DcpProducer::step(struct dcp_message_producers* producers) {
 
     lastSendTime = ep_current_time();
     return (ret == ENGINE_SUCCESS) ? ENGINE_WANT_MORE : ret;
+}
+
+void DcpProducer::updateTimingStats(int batch_size) {
+    if (streamType == DCP_REPLICA_STREAM) {
+        engine_.getEpStats().replicationBatchHisto.add(batch_size);
+    } else if (streamType == DCP_NOTIFIER_STREAM) {
+        engine_.getEpStats().notifierBatchHisto.add(batch_size);
+    } else if (streamType == DCP_XDCR_STREAM) {
+        engine_.getEpStats().xdcrBatchHisto.add(batch_size);
+    } else if (streamType == DCP_VIEWS_STREAM) {
+        engine_.getEpStats().viewsBatchHisto.add(batch_size);
+    }
 }
 
 ENGINE_ERROR_CODE DcpProducer::bufferAcknowledgement(uint32_t opaque,

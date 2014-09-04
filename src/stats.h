@@ -149,6 +149,10 @@ public:
         isShutdown(false),
         rollbackCount(0),
         dirtyAgeHisto(GrowingWidthGenerator<hrtime_t>(0, ONE_SECOND, 1.4), 25),
+        replicationBatchHisto(GrowingWidthGenerator<size_t>(0, 1, 1.0)),
+        notifierBatchHisto(GrowingWidthGenerator<size_t>(0, 1, 1.0)),
+        xdcrBatchHisto(GrowingWidthGenerator<size_t>(0, 1, 1.0)),
+        viewsBatchHisto(GrowingWidthGenerator<size_t>(0, 1, 1.0)),
         diskCommitHisto(GrowingWidthGenerator<hrtime_t>(0, ONE_SECOND, 1.4), 25),
         mlogCompactorHisto(GrowingWidthGenerator<hrtime_t>(0, ONE_SECOND, 1.4), 25),
         timingLog(NULL),
@@ -456,6 +460,11 @@ public:
     // Command timers
     //
 
+    Histogram<size_t> replicationBatchHisto;
+    Histogram<size_t> notifierBatchHisto;
+    Histogram<size_t> xdcrBatchHisto;
+    Histogram<size_t> viewsBatchHisto;
+
     //! Histogram of getvbucket timings
     Histogram<hrtime_t> getVbucketCmdHisto;
 
@@ -568,6 +577,10 @@ public:
         mlogCompactorRuns.store(0);
         alogRuns.store(0);
 
+        replicationBatchHisto.reset();
+        notifierBatchHisto.reset();
+        xdcrBatchHisto.reset();
+        viewsBatchHisto.reset();
         pendingOpsHisto.reset();
         bgWaitHisto.reset();
         bgLoadHisto.reset();
