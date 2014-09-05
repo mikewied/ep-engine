@@ -444,6 +444,10 @@ public:
                               std::vector<bgfetched_item_t> &fetchedItems,
                               hrtime_t start);
 
+    void similarBGFetchCode(const void* cookie, const std::string key,
+                            Item* value, uint16_t vbid,
+                            ENGINE_ERROR_CODE status, bool isMeta);
+
     /**
      * Helper function to update stats after completion of a background fetch
      * for either the value of metadata of a key.
