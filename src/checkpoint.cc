@@ -95,8 +95,8 @@ queue_dirty_t Checkpoint::queueDirty(const queued_item &qi,
     // Check if this checkpoint already had an item for the same key.
     if (it != keyIndex.end()) {
         rv = EXISTING_ITEM;
-        std::list<queued_item>::iterator currPos = it->second.position;
-        uint64_t currMutationId = it->second.mutation_id;
+        std::list<queued_item>::iterator currPos = it->second;
+        uint64_t currBySeqno = (*currPos)->getBySeqno();
 
         cursor_index::iterator map_it = checkpointManager->tapCursors.begin();
         for (; map_it != checkpointManager->tapCursors.end(); ++map_it) {
@@ -106,8 +106,8 @@ queue_dirty_t Checkpoint::queueDirty(const queued_item &qi,
                 const std::string &key = tqi->getKey();
                 checkpoint_index::iterator ita = keyIndex.find(key);
                 if (ita != keyIndex.end()) {
-                    uint64_t mutationId = ita->second.mutation_id;
-                    if (currMutationId <= mutationId &&
+                    uint64_t bySeqno = (*ita->second)->getBySeqno();
+                    if (currBySeqno <= bySeqno &&
                         tqi->getOperation() != queue_op_checkpoint_start) {
                         checkpointManager->
                                   decrCursorOffset_UNLOCKED(map_it->second, 1);
@@ -139,13 +139,12 @@ queue_dirty_t Checkpoint::queueDirty(const queued_item &qi,
 
     if (qi->getNKey() > 0) {
         std::list<queued_item>::iterator last = toWrite.end();
-        // --last is okay as the list is not empty now.
-        index_entry entry = {--last, qi->getBySeqno()};
         // Set the index of the key to the new item that is pushed back into
         // the list.
-        keyIndex[qi->getKey()] = entry;
+        keyIndex[qi->getKey()] = --last;
         if (rv == NEW_ITEM) {
-            size_t newEntrySize = qi->getNKey() + sizeof(index_entry) +
+            size_t newEntrySize = qi->getNKey() +
+                                  sizeof(std::list<queued_item>::iterator) +
                                   sizeof(queued_item);
             memOverhead += newEntrySize;
             stats.memOverhead.fetch_add(newEntrySize);
@@ -166,11 +165,9 @@ size_t Checkpoint::mergePrevCheckpoint(Checkpoint *pPrevCheckpoint) {
 
     std::list<queued_item>::iterator itr = toWrite.begin();
     uint64_t seqno = pPrevCheckpoint->getMutationIdForKey("dummy_key");
-    keyIndex["dummy_key"].mutation_id = seqno;
     (*itr)->setBySeqno(seqno);
 
     seqno = pPrevCheckpoint->getMutationIdForKey("checkpoint_start");
-    keyIndex["checkpoint_start"].mutation_id = seqno;
     ++itr;
     (*itr)->setBySeqno(seqno);
 
@@ -186,10 +183,9 @@ size_t Checkpoint::mergePrevCheckpoint(Checkpoint *pPrevCheckpoint) {
             // Skip the first two meta items
             ++pos; ++pos;
             toWrite.insert(pos, *rit);
-            index_entry entry = {--pos, static_cast<int64_t>(pPrevCheckpoint->
-                                                    getMutationIdForKey(key))};
-            keyIndex[key] = entry;
-            newEntryMemOverhead += key.size() + sizeof(index_entry);
+            keyIndex[key] = --pos;
+            newEntryMemOverhead += key.size() +
+                                   sizeof(std::list<queued_item>::iterator);
             ++numItems;
             ++numNewItems;
         }
@@ -204,7 +200,7 @@ uint64_t Checkpoint::getMutationIdForKey(const std::string &key) {
     uint64_t mid = 0;
     checkpoint_index::iterator it = keyIndex.find(key);
     if (it != keyIndex.end()) {
-        mid = it->second.mutation_id;
+        mid = (*it->second)->getBySeqno();
     }
     return mid;
 }

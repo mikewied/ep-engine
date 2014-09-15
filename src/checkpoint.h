@@ -52,17 +52,9 @@ typedef enum {
 } checkpoint_state;
 
 /**
- * A checkpoint index entry.
- */
-struct index_entry {
-    std::list<queued_item>::iterator position;
-    int64_t mutation_id;
-};
-
-/**
  * The checkpoint index maps a key to a checkpoint index_entry.
  */
-typedef unordered_map<std::string, index_entry> checkpoint_index;
+typedef unordered_map<std::string, std::list<queued_item>::iterator> checkpoint_index;
 
 class Checkpoint;
 class CheckpointManager;
