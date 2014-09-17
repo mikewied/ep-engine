@@ -30,7 +30,7 @@
 
 #include "atomic.h"
 #include "bgfetcher.h"
-#include "checkpoint.h"
+#include "checkpoint_manager.h"
 #include "common.h"
 #include "stored-value.h"
 

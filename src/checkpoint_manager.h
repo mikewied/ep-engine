@@ -15,8 +15,8 @@
  *   limitations under the License.
  */
 
-#ifndef SRC_CHECKPOINT_H_
-#define SRC_CHECKPOINT_H_ 1
+#ifndef SRC_CHECKPOINT_MANAGER_H_
+#define SRC_CHECKPOINT_MANAGER_H_ 1
 
 #include "config.h"
 
@@ -676,4 +676,4 @@ private:
     bool enableChkMerge;
 };
 
-#endif  // SRC_CHECKPOINT_H_
+#endif  // SRC_CHECKPOINT_MANAGER_H_

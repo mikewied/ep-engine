@@ -21,7 +21,7 @@
 #include <utility>
 #include <vector>
 
-#include "checkpoint.h"
+#include "checkpoint_manager.h"
 #include "ep_engine.h"
 #define STATWRITER_NAMESPACE checkpoint
 #include "statwriter.h"

@@ -21,7 +21,7 @@
 #include <algorithm>
 #include <limits>
 
-#include "checkpoint.h"
+#include "checkpoint_manager.h"
 #include "ep.h"
 #include "histo.h"
 #include "item.h"

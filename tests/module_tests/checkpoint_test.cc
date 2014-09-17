@@ -24,7 +24,7 @@
 #include <vector>
 
 #include "assert.h"
-#include "checkpoint.h"
+#include "checkpoint_manager.h"
 #include "stats.h"
 #include "vbucket.h"
 
