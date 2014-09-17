@@ -102,6 +102,10 @@ public:
         return *this;
     }
 
+    void decrOffset(size_t offset);
+
+    void decrPosition();
+
 private:
     std::string                      name;
     std::list<Checkpoint*>::iterator currentCheckpoint;
@@ -555,10 +559,6 @@ private:
 
     bool closeOpenCheckpoint_UNLOCKED(uint64_t id);
     bool closeOpenCheckpoint(uint64_t id);
-
-    void decrCursorOffset_UNLOCKED(CheckpointCursor &cursor, size_t decr);
-
-    void decrCursorPos_UNLOCKED(CheckpointCursor &cursor);
 
     bool isLastMutationItemInCheckpoint(CheckpointCursor &cursor);
 
