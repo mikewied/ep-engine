@@ -81,7 +81,7 @@ static void launch_persistence_thread(void *arg) {
     while(true) {
         size_t itemPos;
         std::vector<queued_item> items;
-        const std::string cursor(CheckpointManager::pCursorName);
+        const std::string cursor(CheckpointCursor::pCursorName);
         args->checkpoint_manager->getAllItemsForCursor(cursor, items);
         for(itemPos = 0; itemPos < items.size(); ++itemPos) {
             queued_item qi = items.at(itemPos);
@@ -287,7 +287,7 @@ void test_reset_checkpoint_id() {
     uint64_t chk = 1;
     size_t lastMutationId = 0;
     std::vector<queued_item> items;
-    const std::string cursor(CheckpointManager::pCursorName);
+    const std::string cursor(CheckpointCursor::pCursorName);
     manager->getAllItemsForCursor(cursor, items);
     for(itemPos = 0; itemPos < items.size(); ++itemPos) {
         queued_item qi = items.at(itemPos);

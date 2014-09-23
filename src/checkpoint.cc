@@ -28,7 +28,7 @@
 #undef STATWRITER_NAMESPACE
 #include "vbucket.h"
 
-const std::string CheckpointManager::pCursorName("persistence");
+const std::string CheckpointCursor::pCursorName("persistence");
 
 /**
  * A listener class to update checkpoint related configs at runtime.
@@ -126,7 +126,8 @@ queue_dirty_t Checkpoint::queueDirty(const queued_item &qi,
                     if (currBySeqno <= bySeqno &&
                         tqi->getOperation() != queue_op_checkpoint_start) {
                         map_it->second.decrOffset(1);
-                        if (map_it->second.name.compare(CheckpointManager::pCursorName) == 0) {
+                        std::string& name = map_it->second.name;
+                        if (name.compare(CheckpointCursor::pCursorName) == 0) {
                             rv = PERSIST_AGAIN;
                         }
                     }
@@ -312,7 +313,7 @@ bool CheckpointManager::addNewCheckpoint_UNLOCKED(uint64_t id) {
     for (; tap_it != tapCursors.end(); ++tap_it) {
         CheckpointCursor &cursor = tap_it->second;
         ++(cursor.currentPos);
-        if (cursor.name.compare(pCursorName) == 0 &&
+        if (cursor.name.compare(CheckpointCursor::pCursorName) == 0 &&
             cursor.currentPos != (*(cursor.currentCheckpoint))->end()) {
             if ((*(cursor.currentPos))->getOperation() == queue_op_checkpoint_end) {
                 // Skip checkpoint_end meta item for the persistence cursors.
@@ -447,7 +448,7 @@ bool CheckpointManager::registerCursor_UNLOCKED(const std::string &name,
     cb_assert(!checkpointList.empty());
 
     bool resetOnCollapse = true;
-    if (name.compare(pCursorName) == 0) {
+    if (name.compare(CheckpointCursor::pCursorName) == 0) {
         resetOnCollapse = false;
     }
 
@@ -688,9 +689,11 @@ size_t CheckpointManager::removeClosedUnrefCheckpoints(
         !checkpointConfig.canKeepClosedCheckpoints() &&
         vbucket->getState() == vbucket_state_replica)
     {
-        size_t curr_remains = getNumItemsForCursor_UNLOCKED(pCursorName);
+        size_t curr_remains =
+            getNumItemsForCursor_UNLOCKED(CheckpointCursor::pCursorName);
         collapseClosedCheckpoints(unrefCheckpointList);
-        size_t new_remains = getNumItemsForCursor_UNLOCKED(pCursorName);
+        size_t new_remains =
+            getNumItemsForCursor_UNLOCKED(CheckpointCursor::pCursorName);
         if (curr_remains > new_remains) {
             size_t diff = curr_remains - new_remains;
             stats.decrDiskQueueSize(diff);
@@ -860,7 +863,7 @@ void CheckpointManager::getAllItemsForCursor(const std::string& name,
 
         if (qi->getOperation() == queue_op_checkpoint_end) {
             moveCursorToNextCheckpoint(it->second);
-            if (name.compare(pCursorName) != 0) {
+            if (name.compare(CheckpointCursor::pCursorName) != 0) {
                 break;
             }
         }
@@ -934,7 +937,7 @@ void CheckpointManager::clear(vbucket_state_t vbState) {
 void CheckpointManager::resetCursors(bool resetPersistenceCursor) {
     cursor_index::iterator cit = tapCursors.begin();
     for (; cit != tapCursors.end(); ++cit) {
-        if (cit->second.name.compare(pCursorName) == 0) {
+        if (cit->second.name.compare(CheckpointCursor::pCursorName) == 0) {
             if (!resetPersistenceCursor) {
                 continue;
             } else {
@@ -1130,7 +1133,7 @@ void CheckpointManager::checkAndAddNewCheckpoint(uint64_t id,
                                                    getCursorNameList();
             std::set<std::string>::const_iterator cit = cursors.begin();
             for (; cit != cursors.end(); ++cit) {
-                if ((*cit).compare(pCursorName) == 0) {
+                if ((*cit).compare(CheckpointCursor::pCursorName) == 0) {
                     // Persistence cursor
                     continue;
                 } else { // TAP cursors
@@ -1143,9 +1146,11 @@ void CheckpointManager::checkAndAddNewCheckpoint(uint64_t id,
             addNewCheckpoint_UNLOCKED(id);
         }
     } else {
-        size_t curr_remains = getNumItemsForCursor_UNLOCKED(pCursorName);
+        size_t curr_remains =
+            getNumItemsForCursor_UNLOCKED(CheckpointCursor::pCursorName);
         collapseCheckpoints(id);
-        size_t new_remains = getNumItemsForCursor_UNLOCKED(pCursorName);
+        size_t new_remains =
+            getNumItemsForCursor_UNLOCKED(CheckpointCursor::pCursorName);
         if (curr_remains > new_remains) {
             size_t diff = curr_remains - new_remains;
             stats.decrDiskQueueSize(diff);
@@ -1313,7 +1318,7 @@ uint64_t CheckpointManager::getPersistenceCursorPreChkId() {
 
 void CheckpointManager::itemsPersisted() {
     LockHolder lh(queueLock);
-    CheckpointCursor& persistenceCursor = tapCursors[pCursorName];
+    CheckpointCursor& persistenceCursor = tapCursors[CheckpointCursor::pCursorName];
     std::list<Checkpoint*>::iterator itr = persistenceCursor.currentCheckpoint;
     pCursorPreCheckpointId = ((*itr)->getId() > 0) ? (*itr)->getId() - 1 : 0;
 }
@@ -1430,7 +1435,8 @@ void CheckpointManager::addStats(ADD_STAT add_stat, const void *cookie) {
     snprintf(buf, sizeof(buf), "vb_%d:num_checkpoints", vbucketId);
     add_casted_stat(buf, checkpointList.size(), add_stat, cookie);
     snprintf(buf, sizeof(buf), "vb_%d:num_items_for_persistence", vbucketId);
-    add_casted_stat(buf, getNumItemsForCursor_UNLOCKED(pCursorName),
+    add_casted_stat(buf,
+                    getNumItemsForCursor_UNLOCKED(CheckpointCursor::pCursorName),
                     add_stat, cookie);
 
     cursor_index::iterator tap_it = tapCursors.begin();

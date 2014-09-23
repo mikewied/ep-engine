@@ -106,6 +106,8 @@ public:
 
     void decrPosition();
 
+    static const std::string pCursorName;
+
 private:
     std::string                      name;
     std::list<Checkpoint*>::iterator currentCheckpoint;
@@ -511,8 +513,6 @@ public:
     int64_t nextBySeqno() {
         return ++lastBySeqno;
     }
-
-    static const std::string pCursorName;
 
 private:
 
