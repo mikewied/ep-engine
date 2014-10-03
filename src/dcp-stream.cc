@@ -570,7 +570,8 @@ void ActiveStream::nextCheckpointItem() {
         queued_item qi = *itr;
 
         if (qi->getOperation() == queue_op_set ||
-            qi->getOperation() == queue_op_del) {
+            qi->getOperation() == queue_op_del ||
+            qi->getOperation() == queue_op_exp) {
             curChkSeqno = qi->getBySeqno();
             lastReadSeqno = qi->getBySeqno();
 

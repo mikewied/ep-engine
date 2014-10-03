@@ -36,6 +36,7 @@
 enum queue_operation {
     queue_op_set,
     queue_op_del,
+    queue_op_exp,
     queue_op_flush,
     queue_op_empty,
     queue_op_checkpoint_start,
@@ -504,8 +505,16 @@ public:
         return op == queue_op_del;
     }
 
+    bool isExpired() {
+        return op == queue_op_exp;
+    }
+
     void setDeleted() {
         op = queue_op_del;
+    }
+
+    void setExpired() {
+        op = queue_op_exp;
     }
 
     uint32_t getQueuedTime(void) const { return queuedTime; }

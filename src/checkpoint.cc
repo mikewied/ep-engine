@@ -129,7 +129,8 @@ queue_dirty_t Checkpoint::queueDirty(const queued_item &qi,
         toWrite.erase(currPos);
     } else {
         if (qi->getOperation() == queue_op_set ||
-            qi->getOperation() == queue_op_del) {
+            qi->getOperation() == queue_op_del ||
+            qi->getOperation() == queue_op_exp) {
             ++numItems;
         }
         rv = NEW_ITEM;
@@ -177,7 +178,8 @@ size_t Checkpoint::mergePrevCheckpoint(Checkpoint *pPrevCheckpoint) {
     for (; rit != pPrevCheckpoint->rend(); ++rit) {
         const std::string &key = (*rit)->getKey();
         if ((*rit)->getOperation() != queue_op_del &&
-            (*rit)->getOperation() != queue_op_set) {
+            (*rit)->getOperation() != queue_op_set &&
+            (*rit)->getOperation() != queue_op_exp) {
             continue;
         }
         checkpoint_index::iterator it = keyIndex.find(key);

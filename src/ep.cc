@@ -2670,7 +2670,8 @@ int EventuallyPersistentStore::flushVBucket(uint16_t vbid) {
             std::vector<queued_item>::iterator it = items.begin();
             for(; it != items.end(); ++it) {
                 if ((*it)->getOperation() != queue_op_set &&
-                    (*it)->getOperation() != queue_op_del) {
+                    (*it)->getOperation() != queue_op_del &&
+                    (*it)->getOperation() != queue_op_exp) {
                     continue;
                 } else if (!prev || prev->getKey() != (*it)->getKey()) {
                     prev = (*it).get();

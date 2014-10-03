@@ -146,6 +146,7 @@ public:
             event_ = TAP_MUTATION;
             break;
         case queue_op_del:
+        case queue_op_exp:
             event_ = TAP_DELETION;
             break;
         case queue_op_flush:

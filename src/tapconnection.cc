@@ -1233,6 +1233,7 @@ queued_item TapProducer::nextFgFetched_UNLOCKED(bool &shouldPause) {
             switch(qi->getOperation()) {
             case queue_op_set:
             case queue_op_del:
+            case queue_op_exp:
                 if (supportCheckpointSync_ && isLastItem) {
                     it->second.lastItem = true;
                 } else {
@@ -1899,7 +1900,8 @@ Item* TapProducer::getNextItem(const void *c, uint16_t *vbucket, uint16_t &ret,
                 return NULL;
             }
             ++stats.numTapFGFetched;
-        } else if (qi->getOperation() == queue_op_del) {
+        } else if (qi->getOperation() == queue_op_del ||
+                   qi->getOperation() == queue_op_exp) {
             itm = new Item(qi->getKey().c_str(), qi->getNKey(), 0,
                            0, 0, NULL, 0, qi->getCas(), -1, qi->getVBucketId());
             itm->setRevSeqno(qi->getRevSeqno());
