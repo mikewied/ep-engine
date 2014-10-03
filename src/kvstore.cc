@@ -45,6 +45,7 @@ size_t KVStore::getEstimatedItemCount(std::vector<uint16_t> &vbs) {
 }
 
 void RollbackCB::callback(GetValue &val) {
+    /*
     cb_assert(val.getValue());
     cb_assert(dbHandle);
     Item *itm = val.getValue();
@@ -93,6 +94,7 @@ void RollbackCB::callback(GetValue &val) {
                 gcb.val.getStatus());
     }
     delete itm;
+    */
 }
 
 void BfilterCB::addKeyToFilter(const char *key, size_t keylen, bool isDeleted) {

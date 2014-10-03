@@ -106,7 +106,7 @@ ADD_CUSTOM_COMMAND(OUTPUT
                         genconfig
                   COMMENT "Generating code for configuration class")
 
-SET(KVSTORE_SOURCE src/crc32.c src/kvstore.cc src/mutation_log.cc)
+SET(KVSTORE_SOURCE src/crc32.c src/kvstore.cc)
 SET(COUCH_KVSTORE_SOURCE src/couch-kvstore/couch-kvstore.cc
             src/couch-kvstore/couch-fs-stats.cc)
 SET(OBJECTREGISTRY_SOURCE src/objectregistry.cc)
@@ -184,14 +184,20 @@ ADD_EXECUTABLE(ep-engine_mutex_test
 TARGET_LINK_LIBRARIES(ep-engine_mutex_test platform)
 
 ADD_EXECUTABLE(ep-engine_priority_test  tests/module_tests/priority_test.cc
-                        src/priority.cc)
+  src/priority.cc)
 ADD_EXECUTABLE(ep-engine_ringbuffer_test tests/module_tests/ringbuffer_test.cc)
 
 ADD_EXECUTABLE(ep-engine_failover_table_test tests/module_tests/failover_table_test.cc
-                        src/failover-table.cc src/mutex.cc src/testlogger.cc
-                        tests/module_tests/test_memory_tracker.cc
-                        ${OBJECTREGISTRY_SOURCE} ${CONFIG_SOURCE})
+  src/failover-table.cc src/mutex.cc src/testlogger.cc
+  tests/module_tests/test_memory_tracker.cc
+  ${OBJECTREGISTRY_SOURCE} ${CONFIG_SOURCE})
 TARGET_LINK_LIBRARIES(ep-engine_failover_table_test cJSON platform)
+
+ADD_EXECUTABLE(ep-engine_kvstore_test tests/module_tests/kvstore_test.cc
+  ${OBJECTREGISTRY_SOURCE} ${KVSTORE_SOURCE} ${COUCH_KVSTORE_SOURCE}
+  ${CONFIG_SOURCE} src/mutex.cc src/testlogger.cc)
+TARGET_LINK_LIBRARIES(ep-engine_kvstore_test cJSON JSON_checker couchstore
+  dirutils platform)
 
 ADD_TEST(ep-engine_atomic_ptr_test ep-engine_atomic_ptr_test)
 ADD_TEST(ep-engine_atomic_test ep-engine_atomic_test)
