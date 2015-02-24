@@ -158,6 +158,7 @@ private:
     AtomicValue<size_t> itemsSent;
     AtomicValue<size_t> totalBytesSent;
     AtomicValue<size_t> ackedBytes;
+    size_t steps;
 
     static const uint32_t defaultNoopInerval;
 };

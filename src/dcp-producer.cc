@@ -43,7 +43,7 @@ DcpProducer::DcpProducer(EventuallyPersistentEngine &e, const void *cookie,
                          const std::string &name, bool isNotifier)
     : Producer(e, cookie, name), rejectResp(NULL),
       notifyOnly(isNotifier), lastSendTime(ep_current_time()), log(NULL),
-      itemsSent(0), totalBytesSent(0), ackedBytes(0) {
+      itemsSent(0), totalBytesSent(0), ackedBytes(0), steps(0) {
     setSupportAck(true);
     setReserved(true);
     setPaused(true);
@@ -223,6 +223,7 @@ ENGINE_ERROR_CODE DcpProducer::getFailoverLog(uint32_t opaque, uint16_t vbucket,
 
 ENGINE_ERROR_CODE DcpProducer::step(struct dcp_message_producers* producers) {
     BlockTimer timer(&engine_.getEpStats().producerStepHisto);
+    steps++;
     setLastWalkTime();
 
     if (doDisconnect()) {
@@ -522,7 +523,7 @@ void DcpProducer::aggregateQueueStats(ConnCounter* aggregator) {
             " is NULL!!!", logHeader());
         return;
     }
-    aggregator->conn_queueDrain += itemsSent;
+    aggregator->conn_queueDrain += steps;
     aggregator->conn_totalBytes += totalBytesSent;
     aggregator->conn_queueRemaining += getItemsRemaining_UNLOCKED();
     aggregator->conn_queueBackfillRemaining += totalBackfillBacklogs;
