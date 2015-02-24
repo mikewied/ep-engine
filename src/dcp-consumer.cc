@@ -349,6 +349,7 @@ ENGINE_ERROR_CODE DcpConsumer::setVBucketState(uint32_t opaque,
 }
 
 ENGINE_ERROR_CODE DcpConsumer::step(struct dcp_message_producers* producers) {
+    BlockTimer timer(&engine_.getEpStats().consumerStepHisto);
     setLastWalkTime();
 
     if (doDisconnect()) {

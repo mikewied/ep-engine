@@ -222,6 +222,7 @@ ENGINE_ERROR_CODE DcpProducer::getFailoverLog(uint32_t opaque, uint16_t vbucket,
 }
 
 ENGINE_ERROR_CODE DcpProducer::step(struct dcp_message_producers* producers) {
+    BlockTimer timer(&engine_.getEpStats().producerStepHisto);
     setLastWalkTime();
 
     if (doDisconnect()) {

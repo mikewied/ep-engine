@@ -4091,6 +4091,9 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::doTimingStats(const void *cookie,
     add_casted_stat("disk_vbstate_snapshot", stats.snapshotVbucketHisto,
                     add_stat, cookie);
 
+    add_casted_stat("producer_step", stats.producerStepHisto, add_stat, cookie);
+    add_casted_stat("consumer_step", stats.consumerStepHisto, add_stat, cookie);
+
     add_casted_stat("item_alloc_sizes", stats.itemAllocSizeHisto,
                     add_stat, cookie);
     return ENGINE_SUCCESS;
