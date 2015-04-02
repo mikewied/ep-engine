@@ -163,7 +163,7 @@ private:
     BufferLog* log;
     BackfillManager* backfillMgr;
     std::list<uint16_t> ready;
-    std::map<uint16_t, stream_t> streams;
+    stream_t* streams;
     AtomicValue<size_t> itemsSent;
     AtomicValue<size_t> totalBytesSent;
     AtomicValue<size_t> ackedBytes;
