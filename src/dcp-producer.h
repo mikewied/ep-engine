@@ -167,6 +167,7 @@ private:
     AtomicValue<size_t> itemsSent;
     AtomicValue<size_t> totalBytesSent;
     AtomicValue<size_t> ackedBytes;
+    const int maxVBuckets;
 
     static const uint32_t defaultNoopInerval;
 };

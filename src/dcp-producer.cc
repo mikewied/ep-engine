@@ -44,9 +44,9 @@ DcpProducer::DcpProducer(EventuallyPersistentEngine &e, const void *cookie,
                          const std::string &name, bool isNotifier)
     : Producer(e, cookie, name), rejectResp(NULL),
       notifyOnly(isNotifier), lastSendTime(ep_current_time()), log(NULL),
-      itemsSent(0), totalBytesSent(0), ackedBytes(0) {
-    Configuration& config = e.getConfiguration();
-    streams = new stream_t[config.getMaxVbuckets()];
+      itemsSent(0), totalBytesSent(0), ackedBytes(0),
+      maxVBuckets(e.getConfiguration().getMaxVbuckets()) {
+    streams = new stream_t[maxVBuckets];
     setSupportAck(true);
     setReserved(true);
     setPaused(true);
@@ -145,15 +145,18 @@ ENGINE_ERROR_CODE DcpProducer::streamRequest(uint32_t flags,
 
     bool add_vb_conn_map = true;
     stream_t stream = streams[vbucket];
-    if (stream.get() && stream->isActive()) {
-        LOG(EXTENSION_LOG_WARNING, "%s (vb %d) Stream request failed because a "
-            "stream already exists for this vbucket", logHeader(), vbucket);
-        return ENGINE_KEY_EEXISTS;
-    } else {
-        streams[vbucket].reset(NULL);
-        ready.remove(vbucket);
-        // Don't need to add an entry to vbucket-to-conns map
-        add_vb_conn_map = false;
+    if (stream.get()) {
+        if (stream->isActive()) {
+            LOG(EXTENSION_LOG_WARNING, "%s (vb %d) Stream request failed "
+            "because a stream already exists for this vbucket", logHeader(),
+            vbucket);
+            return ENGINE_KEY_EEXISTS;
+        } else {
+            streams[vbucket].reset(NULL);
+            ready.remove(vbucket);
+            // Don't need to add an entry to vbucket-to-conns map
+            add_vb_conn_map = false;
+        }
     }
 
     // If we are a notify stream then we can't use the start_seqno supplied
@@ -472,7 +475,7 @@ ENGINE_ERROR_CODE DcpProducer::handleResponse(
 
         bool found = false;
         stream_t stream;
-        for (int vbid = 0; vbid < 1024; vbid++) {
+        for (int vbid = 0; vbid < maxVBuckets; vbid++) {
             stream = streams[vbid];
             if (stream.get() && stream->getType() == STREAM_ACTIVE) {
                 if (opaque == stream->getOpaque()) {
@@ -571,7 +574,7 @@ void DcpProducer::addStats(ADD_STAT add_stat, const void *c) {
         addStat("flow_control", "disabled", add_stat, c);
     }
 
-    for (int i = 0; i < 1024; i++) {
+    for (int i = 0; i < maxVBuckets; i++) {
         stream_t stream = streams[i];
         if (stream.get()) {
             stream->addStats(add_stat, c);
@@ -581,7 +584,7 @@ void DcpProducer::addStats(ADD_STAT add_stat, const void *c) {
 
 void DcpProducer::addTakeoverStats(ADD_STAT add_stat, const void* c,
                                    uint16_t vbid) {
-    for (int i = 0; i < 1024; i++) {
+    for (int i = 0; i < maxVBuckets; i++) {
         stream_t stream = streams[i];
         if (stream.get() && stream->getType() == STREAM_ACTIVE) {
             ActiveStream* as = static_cast<ActiveStream*>(stream.get());
@@ -607,7 +610,12 @@ void DcpProducer::aggregateQueueStats(ConnCounter* aggregator) {
 void DcpProducer::notifySeqnoAvailable(uint16_t vbucket, uint64_t seqno) {
     stream_t stream = streams[vbucket];
     if (stream.get() && stream->isActive()) {
+        LOG(EXTENSION_LOG_WARNING, "%s (%d) Seqno %llu available", logHeader(),
+            vbucket, seqno);
         stream->notifySeqnoAvailable(seqno);
+    } else {
+        LOG(EXTENSION_LOG_WARNING, "%s (%d) Not a producer", logHeader(),
+            vbucket);
     }
 }
 
@@ -621,7 +629,7 @@ void DcpProducer::vbucketStateChanged(uint16_t vbucket, vbucket_state_t state) {
 void DcpProducer::closeAllStreams() {
     LockHolder lh(queueLock);
     std::list<uint16_t> vblist;
-    for (int vbid = 0; vbid < 1024; vbid++) {
+    for (int vbid = 0; vbid < maxVBuckets; vbid++) {
         stream_t stream = streams[vbid];
         if (stream.get()) {
             stream->setDead(END_STREAM_DISCONNECTED);
@@ -705,7 +713,7 @@ void DcpProducer::setDisconnect(bool disconnect) {
 
     if (disconnect) {
         LockHolder lh(queueLock);
-        for (int vbid = 0; vbid < 1024; vbid++) {
+        for (int vbid = 0; vbid < maxVBuckets; vbid++) {
             stream_t stream = streams[vbid];
             if (stream.get()) {
                 stream->setDead(END_STREAM_DISCONNECTED);
@@ -766,7 +774,7 @@ void DcpProducer::setTimeForNoop() {
 }
 
 void DcpProducer::clearQueues() {
-    for (int vbid = 0; vbid < 1024; vbid++) {
+    for (int vbid = 0; vbid < maxVBuckets; vbid++) {
         stream_t stream = streams[vbid];
         if (stream.get()) {
             stream->clear();
@@ -790,7 +798,7 @@ size_t DcpProducer::getItemsSent() {
 size_t DcpProducer::getItemsRemaining_UNLOCKED() {
     size_t remainingSize = 0;
 
-    for (int vbid = 0; vbid < 1024; vbid++) {
+    for (int vbid = 0; vbid < maxVBuckets; vbid++) {
         stream_t stream = streams[vbid];
         if (stream.get() && stream->getType() == STREAM_ACTIVE) {
             ActiveStream *as = static_cast<ActiveStream *>(stream.get());
@@ -808,7 +816,7 @@ size_t DcpProducer::getTotalBytes() {
 std::list<uint16_t> DcpProducer::getVBList() {
     LockHolder lh(queueLock);
     std::list<uint16_t> vblist;
-    for (int vbid = 0; vbid < 1024; vbid++) {
+    for (int vbid = 0; vbid < maxVBuckets; vbid++) {
         stream_t stream = streams[vbid];
         if (stream.get()) {
             vblist.push_back(vbid);
