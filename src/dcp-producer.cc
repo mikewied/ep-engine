@@ -470,7 +470,6 @@ ENGINE_ERROR_CODE DcpProducer::handleResponse(
             reinterpret_cast<protocol_binary_response_dcp_stream_req*>(resp);
         uint32_t opaque = pkt->message.header.response.opaque;
 
-        LockHolder lh(queueLock);
         bool found = false;
         stream_t stream;
         for (int vbid = 0; vbid < 1024; vbid++) {
@@ -484,7 +483,6 @@ ENGINE_ERROR_CODE DcpProducer::handleResponse(
         }
 
         if (found) {
-            lh.unlock();
             ActiveStream *as = static_cast<ActiveStream*>(stream.get());
             if (opcode == PROTOCOL_BINARY_CMD_DCP_SET_VBUCKET_STATE) {
                 as->setVBucketStateAckRecieved();
@@ -583,8 +581,6 @@ void DcpProducer::addStats(ADD_STAT add_stat, const void *c) {
 
 void DcpProducer::addTakeoverStats(ADD_STAT add_stat, const void* c,
                                    uint16_t vbid) {
-    LockHolder lh(queueLock);
-
     for (int i = 0; i < 1024; i++) {
         stream_t stream = streams[i];
         if (stream.get() && stream->getType() == STREAM_ACTIVE) {
@@ -597,7 +593,6 @@ void DcpProducer::addTakeoverStats(ADD_STAT add_stat, const void* c,
 }
 
 void DcpProducer::aggregateQueueStats(ConnCounter* aggregator) {
-    LockHolder lh(queueLock);
     if (!aggregator) {
         LOG(EXTENSION_LOG_WARNING, "%s Pointer to the queue stats aggregator"
             " is NULL!!!", logHeader());
@@ -610,20 +605,15 @@ void DcpProducer::aggregateQueueStats(ConnCounter* aggregator) {
 }
 
 void DcpProducer::notifySeqnoAvailable(uint16_t vbucket, uint64_t seqno) {
-    LockHolder lh(queueLock);
-
     stream_t stream = streams[vbucket];
     if (stream.get() && stream->isActive()) {
-        lh.unlock();
         stream->notifySeqnoAvailable(seqno);
     }
 }
 
 void DcpProducer::vbucketStateChanged(uint16_t vbucket, vbucket_state_t state) {
-    LockHolder lh(queueLock);
     stream_t stream = streams[vbucket];
     if (stream.get()) {
-        lh.unlock();
         stream->setDead(END_STREAM_STATE);
     }
 }
@@ -776,8 +766,6 @@ void DcpProducer::setTimeForNoop() {
 }
 
 void DcpProducer::clearQueues() {
-    LockHolder lh(queueLock);
-
     for (int vbid = 0; vbid < 1024; vbid++) {
         stream_t stream = streams[vbid];
         if (stream.get()) {
